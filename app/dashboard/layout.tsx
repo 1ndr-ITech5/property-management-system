@@ -1,42 +1,14 @@
-"use client";
-
-import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
-    }
-  }, [user, loading, router]);
-
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  }
-
-  if (!user) {
-    return null;
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow p-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-bold">Property Admin</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user.email}</span>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gray-100 italic">
+      <nav className="p-4 bg-white border-b">
+        <h2 className="font-bold">Dashboard Layout (Protected Placeholder)</h2>
       </nav>
-      <main className="max-w-7xl mx-auto p-6">{children}</main>
+      <main className="p-8">{children}</main>
     </div>
   );
 }

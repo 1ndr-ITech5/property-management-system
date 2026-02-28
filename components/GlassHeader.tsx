@@ -3,17 +3,20 @@
 import { Search, Bell, Menu } from "lucide-react";
 import { motion } from "framer-motion";
 
-export default function GlassHeader() {
+export default function GlassHeader({ onMenuClick }: { onMenuClick: () => void }) {
     return (
         <motion.header
             initial={{ y: -50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
-            className="w-full flex items-center justify-between px-8 py-6 mb-8"
+            className="w-full flex items-center justify-between px-4 md:px-8 py-6 mb-8"
         >
             <div className="flex items-center gap-4">
                 {/* Mobile menu button (hidden on desktop) */}
-                <button className="md:hidden p-2 text-slate-400 hover:text-white glass-card rounded-xl">
+                <button
+                    onClick={onMenuClick}
+                    className="md:hidden p-2 text-slate-400 hover:text-white glass-card rounded-xl"
+                >
                     <Menu className="w-5 h-5" />
                 </button>
 

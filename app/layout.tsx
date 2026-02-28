@@ -1,27 +1,29 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "@/app/globals.css";
-import { AuthProvider } from "@/context/AuthContext";
+import type { Metadata } from 'next'
+import { Outfit } from 'next/font/google'
+import './globals.css'
+import { AuthProvider } from '@/context/AuthContext'
+import AnimatedBackground from '@/components/AnimatedBackground'
 
-const inter = Inter({ subsets: ["latin"] });
+const outfit = Outfit({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-    title: "Mini Property Management Admin",
-    description: "A simple property management system",
-};
+    title: 'PMS Lite | Property Management System',
+    description: 'Manage your properties with ease and clarity.',
+}
 
 export default function RootLayout({
     children,
-}: Readonly<{
-    children: React.ReactNode;
-}>) {
+}: {
+    children: React.ReactNode
+}) {
     return (
         <html lang="en">
-            <body className={inter.className}>
+            <body className={`${outfit.className} antialiased min-h-screen text-slate-100`}>
+                <AnimatedBackground />
                 <AuthProvider>
                     {children}
                 </AuthProvider>
             </body>
         </html>
-    );
+    )
 }

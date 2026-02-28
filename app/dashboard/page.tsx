@@ -17,6 +17,10 @@ import {
   onSnapshot
 } from "firebase/firestore";
 
+import { motion } from "framer-motion";
+import StatsCards from "@/components/StatsCards";
+import RevenueChart from "@/components/RevenueChart";
+
 // Modular Components
 import PropertyCard from "@/components/PropertyCard";
 import AddPropertyModal from "@/components/AddPropertyModal";
@@ -101,6 +105,14 @@ export default function DashboardPage() {
     return result;
   }, [properties, statusFilter, sortKey, sortOrder]);
 
+  // Aggregate Metrics for StatsCards
+  const occupancyRate = properties.length
+    ? Math.round((properties.filter(p => p.status === "booked").length / properties.length) * 100) + "%"
+    : "0%";
+  const monthlyRevenue = properties
+    .filter(p => p.status === "booked")
+    .reduce((acc, p) => acc + (p.price * 30), 0);
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -182,156 +194,137 @@ export default function DashboardPage() {
   };
 
   return (
-    <ProtectedRoute>
-      <div className="min-h-screen bg-slate-50 font-sans">
-        {/* Navigation Bar */}
-        <nav className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur-md">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex h-16 items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-extrabold tracking-tight text-slate-900">
-                  Property <span className="text-blue-600">Admin</span>
-                </span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="hidden text-sm font-medium text-slate-600 md:block">
-                  {currentUser?.email}
-                </span>
-                <button
-                  onClick={handleLogout}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </nav>
+    <>
+      {/* Top Banner & Actions */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Manage Properties</h1>
+          <p className="text-slate-400 mt-1">Real-time data synchronization for all units.</p>
+        </div>
+        <button
+          onClick={() => setIsAdding(true)}
+          className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-indigo-500/20"
+        >
+          <span className="text-lg leading-none">+</span> Add Unit
+        </button>
+      </div>
 
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          {/* Header Section */}
-          <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Menaxho Pronat</h1>
-              <p className="mt-1 text-slate-500 font-medium text-sm">Shikoni, redaktoni ose fshini listimet tuaja në kohë reale.</p>
-            </div>
-            <button
-              onClick={() => setIsAdding(true)}
-              className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-bold text-white shadow-xl shadow-slate-200 transition-all duration-200 hover:bg-blue-600 hover:shadow-blue-500/25 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      {/* Overview Analytics */}
+      <StatsCards
+        totalProperties={properties.length}
+        occupancyRate={occupancyRate}
+        monthlyRevenue={monthlyRevenue}
+      />
+
+      <RevenueChart />
+
+      {/* Filters Toolbar */}
+      <div className="glass-panel p-4 rounded-2xl mb-8 flex flex-wrap items-center gap-6">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Filter:</span>
+          <div className="flex bg-white/5 p-1 rounded-xl">
+            {(["all", "available", "booked"] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${statusFilter === status
+                    ? 'bg-white/10 text-white shadow-inner border border-white/5'
+                    : 'text-slate-400 hover:text-white'
+                  }`}
+              >
+                {status === 'all' ? 'All' : status === 'available' ? 'Available' : 'Booked'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 md:ml-auto">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sort:</span>
+          <div className="flex items-center gap-2">
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as any)}
+              className="bg-white/5 border border-white/10 text-white px-4 py-2 rounded-xl text-sm outline-none"
             >
-              <span className="mr-2 text-xl">+</span>
-              Shto Pronë
+              <option value="name" className="text-slate-900">Name</option>
+              <option value="price" className="text-slate-900">Price</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+              className="p-2 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+            >
+              {sortOrder === 'asc' ? '↑' : '↓'}
             </button>
           </div>
-
-          {/* Filters and Sorting Toolbar */}
-          <div className="mb-10 flex flex-wrap items-center gap-5 rounded-[2rem] bg-white px-6 py-5 shadow-sm ring-1 ring-slate-200">
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Filtro:</span>
-              <div className="flex bg-slate-100 p-1 rounded-xl">
-                {(["all", "available", "booked"] as const).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${statusFilter === status
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900'
-                      }`}
-                  >
-                    {status === 'all' ? 'Të gjitha' : status === 'available' ? 'Të Disponueshme' : 'Të Rezervuara'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 md:ml-auto">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rendit pas:</span>
-              <div className="flex items-center gap-2">
-                <select
-                  value={sortKey}
-                  onChange={(e) => setSortKey(e.target.value as any)}
-                  className="rounded-xl border-none bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none appearance-none cursor-pointer pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E')] bg-[length:1em_1em] bg-[right_0.75rem_center] bg-no-repeat"
-                >
-                  <option value="name">Emrit</option>
-                  <option value="price">Çmimit</option>
-                </select>
-                <button
-                  onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                  className="flex items-center justify-center h-10 w-10 rounded-xl bg-slate-900 text-white hover:bg-blue-600 transition-all shadow-lg shadow-slate-200"
-                  title={sortOrder === 'asc' ? 'Rritëse' : 'Zbritëse'}
-                >
-                  {sortOrder === 'asc' ? (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 4h13M3 8h9m-9 4h6m4 4l4 4m0 0l4-4m-4 4v-12" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Properties Grid */}
-          {fetching ? (
-            <div className="flex flex-col items-center justify-center py-24">
-              <div className="relative h-16 w-16">
-                <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
-              </div>
-              <p className="mt-6 text-sm font-bold text-slate-500 animate-pulse tracking-wide">Duke ngarkuar pronat tuaja...</p>
-            </div>
-          ) : transformedProperties.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed border-slate-200 bg-white py-24 text-center shadow-sm">
-              <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-slate-50 text-slate-300">
-                <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-black text-slate-900">Nuk u gjet asnjë pronë</h3>
-              <p className="mt-2 text-slate-500 font-medium max-w-xs mx-auto">Nuk ka prona që përputhen me kriteret tuaja ose lista është boshe.</p>
-            </div>
-          ) : (
-            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {transformedProperties.map((property) => (
-                <PropertyCard
-                  key={property.id}
-                  property={property}
-                  onEdit={setEditingProperty}
-                  onDelete={handleDeleteProperty}
-                />
-              ))}
-            </div>
-          )}
-        </main>
-
-        {/* Modals */}
-        <AddPropertyModal
-          isOpen={isAdding}
-          onClose={() => setIsAdding(false)}
-          onAdd={handleAddProperty}
-          loading={loading}
-        />
-
-        <EditPropertyModal
-          isOpen={!!editingProperty}
-          onClose={() => setEditingProperty(null)}
-          property={editingProperty}
-          onUpdate={handleUpdateProperty}
-          loading={loading}
-        />
-
-        {/* Toast Notifications */}
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
+        </div>
       </div>
-    </ProtectedRoute>
+
+      {/* Properties Grid */}
+      {fetching ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="w-12 h-12 border-4 border-white/10 border-t-indigo-500 rounded-full animate-spin mb-4" />
+          <p className="text-slate-400 font-medium animate-pulse">Syncing data...</p>
+        </div>
+      ) : transformedProperties.length === 0 ? (
+        <div className="glass-panel p-16 rounded-3xl text-center border-dashed">
+          <h3 className="text-2xl font-bold text-white mb-2">No units found</h3>
+          <p className="text-slate-400">Try adjusting your filters or add a new property.</p>
+        </div>
+      ) : (
+        <motion.div
+          className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          initial="hidden"
+          animate="show"
+          variants={{
+            hidden: { opacity: 0 },
+            show: {
+              opacity: 1,
+              transition: { staggerChildren: 0.1 }
+            }
+          }}
+        >
+          {transformedProperties.map((property) => (
+            <motion.div
+              key={property.id}
+              variants={{
+                hidden: { opacity: 0, y: 20 },
+                show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+              }}
+            >
+              <PropertyCard
+                property={property}
+                onEdit={setEditingProperty}
+                onDelete={handleDeleteProperty}
+              />
+            </motion.div>
+          ))}
+        </motion.div>
+      )}
+
+      {/* Modals */}
+      <AddPropertyModal
+        isOpen={isAdding}
+        onClose={() => setIsAdding(false)}
+        onAdd={handleAddProperty}
+        loading={loading}
+      />
+
+      <EditPropertyModal
+        isOpen={!!editingProperty}
+        onClose={() => setEditingProperty(null)}
+        property={editingProperty}
+        onUpdate={handleUpdateProperty}
+        loading={loading}
+      />
+
+      {/* Toast Notifications */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+    </>
   );
 }

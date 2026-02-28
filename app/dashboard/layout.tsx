@@ -1,14 +1,23 @@
+import GlassSidebar from "@/components/GlassSidebar";
+import GlassHeader from "@/components/GlassHeader";
+import ProtectedRoute from "@/components/ProtectedRoute";
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-100 italic">
-      <nav className="p-4 bg-white border-b">
-        <h2 className="font-bold">Dashboard Layout (Protected Placeholder)</h2>
-      </nav>
-      <main className="p-8">{children}</main>
-    </div>
+    <ProtectedRoute>
+      <div className="flex h-screen w-full overflow-hidden text-slate-50">
+        <GlassSidebar />
+        <main className="flex-1 flex flex-col h-full overflow-y-auto relative z-10">
+          <GlassHeader />
+          <div className="px-8 pb-12">
+            {children}
+          </div>
+        </main>
+      </div>
+    </ProtectedRoute>
   );
 }

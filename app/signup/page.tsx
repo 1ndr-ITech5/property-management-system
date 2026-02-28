@@ -34,7 +34,7 @@ export default function SignupPage() {
       setLoading(true);
       await signup(email, password);
       setSuccess("Account created successfully! Redirecting...");
-      setTimeout(() => router.push("/"), 1500);
+      setTimeout(() => router.push("/dashboard"), 1500);
     } catch (err: any) {
       const errorCode = err.code;
       if (errorCode === "auth/email-already-in-use") {

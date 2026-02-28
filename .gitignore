@@ -1,8 +1,17 @@
+# Next.js build folder
+.next/
+out/
+
+# Node modules
 node_modules/
-build/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vite / CRA / Typescript
 dist/
-coverage/
-.DS_Store
-*.log
-.env*
-!.env.example
+*.tsbuildinfo

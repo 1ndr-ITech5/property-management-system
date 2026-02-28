@@ -30,7 +30,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
       await login(email, password);
-      router.push("/");
+      router.push("/dashboard");
     } catch (err: any) {
       const errorCode = err.code;
       if (errorCode === "auth/user-not-found" || errorCode === "auth/invalid-email") {

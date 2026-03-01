@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Home, BarChart2, Settings, LogOut, X } from "lucide-react";
+import { LayoutDashboard, Home, BarChart2, Settings, LogOut, X, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 
@@ -18,6 +18,7 @@ export default function GlassSidebar({ isOpen, onClose }: GlassSidebarProps) {
 
     const navItems = [
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+        { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
         { name: "Properties", href: "/dashboard/properties", icon: Home },
         { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
         { name: "Settings", href: "/dashboard/settings", icon: Settings },

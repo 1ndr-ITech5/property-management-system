@@ -41,10 +41,21 @@ interface Property {
   createdAt: any;
 }
 
+interface Reservation {
+    id: string;
+    propertyId: string;
+    ownerId: string;
+    guestName: string;
+    checkIn: string;
+    checkOut: string;
+    createdAt: any;
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isAdding, setIsAdding] = useState(false);
 
   // Toast State
@@ -57,13 +68,15 @@ export default function DashboardPage() {
     if (!currentUser) return;
 
     setFetching(true);
-    const q = query(
+    
+    // Properties Listener
+    const qProps = query(
       collection(db, "properties"), 
       where("ownerId", "==", currentUser.uid),
       orderBy("createdAt", "desc")
     );
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const unsubProps = onSnapshot(qProps, (querySnapshot) => {
       const props: Property[] = [];
       querySnapshot.forEach((docSnap) => {
         const data = docSnap.data();
@@ -79,13 +92,24 @@ export default function DashboardPage() {
       });
       setProperties(props);
       setFetching(false);
-    }, (error) => {
-      console.error("Error listening to properties: ", error);
-      showToast("Gabim gjatë ngarkimit të pronave.", "error");
-      setFetching(false);
     });
 
-    return () => unsubscribe();
+    // Reservations Listener
+    const qRes = query(
+        collection(db, "reservations"),
+        where("ownerId", "==", currentUser.uid)
+    );
+
+    const unsubRes = onSnapshot(qRes, (snap) => {
+        const resData: Reservation[] = [];
+        snap.forEach(doc => resData.push({ id: doc.id, ...doc.data() } as Reservation));
+        setReservations(resData);
+    });
+
+    return () => {
+        unsubProps();
+        unsubRes();
+    };
   }, [currentUser]);
 
   const showToast = (message: string, type: "success" | "error") => {
@@ -122,30 +146,27 @@ export default function DashboardPage() {
   const stats = useMemo(() => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
-    const currentMonthName = months[currentMonth];
 
     const lastDate = new Date(currentYear, currentMonth - 1, 1);
     const lastMonth = lastDate.getMonth();
     const lastMonthYear = lastDate.getFullYear();
-    const lastMonthName = months[lastMonth];
 
-    const getStatsForMonth = (m: number, y: number, monthName: string) => {
-      const monthProps = properties.filter(p => {
-        if (!p.createdAt) return false;
-        const d = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
+    const getResCountForMonth = (m: number, y: number) => {
+      return reservations.filter(r => {
+        const d = new Date(r.checkIn);
         return d.getMonth() === m && d.getFullYear() === y;
-      });
-
-      return {
-        booked: monthProps.filter(p => p.status === "booked").length,
-        available: monthProps.filter(p => p.status === "available").length
-      };
+      }).length;
     };
 
-    const current = getStatsForMonth(currentMonth, currentYear, currentMonthName);
-    const previous = getStatsForMonth(lastMonth, lastMonthYear, lastMonthName);
+    const currentlyBookedCount = properties.filter(p => 
+        reservations.some(r => r.propertyId === p.id && todayStr >= r.checkIn && todayStr <= r.checkOut)
+    ).length;
+
+    const currentMonthTotal = getResCountForMonth(currentMonth, currentYear);
+    const prevMonthTotal = getResCountForMonth(lastMonth, lastMonthYear);
 
     const formatTrend = (curr: number, prev: number) => {
       const diff = curr - prev;
@@ -153,12 +174,12 @@ export default function DashboardPage() {
     };
 
     return {
-      currentBooked: current.booked,
-      bookedTrend: formatTrend(current.booked, previous.booked),
-      currentAvailable: current.available,
-      availableTrend: formatTrend(current.available, previous.available)
+      currentBooked: currentlyBookedCount,
+      bookedTrend: formatTrend(currentMonthTotal, prevMonthTotal),
+      currentAvailable: properties.length - currentlyBookedCount,
+      availableTrend: "0"
     };
-  }, [properties]);
+  }, [properties, reservations]);
 
   const handleAddProperty = async (
     name: string, 
@@ -170,16 +191,11 @@ export default function DashboardPage() {
     bathrooms: number,
     location: string
   ) => {
-    if (!currentUser) {
-      console.error("DEBUG: No currentUser found in handleAddProperty");
-      return;
-    }
-
-    console.log("DEBUG: handleAddProperty started for user:", currentUser.uid);
+    if (!currentUser) return;
 
     try {
       setLoading(true);
-      const docRef = await addDoc(collection(db, "properties"), {
+      await addDoc(collection(db, "properties"), {
         name,
         price,
         status,
@@ -192,11 +208,10 @@ export default function DashboardPage() {
         ownerId: currentUser.uid,
       });
 
-      console.log("DEBUG: Firestore addDoc successful. Doc ID:", docRef.id);
       setIsAdding(false);
       showToast("Prona u shtua me sukses!", "success");
     } catch (e) {
-      console.error("DEBUG: Firestore error in handleAddProperty:", e);
+      console.error(e);
       showToast("Gabim gjatë shtimit të pronës.", "error");
     } finally {
       setLoading(false);
@@ -282,15 +297,15 @@ export default function DashboardPage() {
           </button>
 
           <button
-            onClick={() => showToast("Gjenerimi i raportit do të jetë i disponueshëm së shpejti.", "success")}
+            onClick={() => router.push("/dashboard/calendar")}
             className="flex items-center gap-4 p-5 rounded-[2rem] bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-amber-500/30 transition-all group text-left shadow-xl"
           >
             <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
               <FileText className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-white font-bold">Reports</p>
-              <p className="text-xs text-slate-500">Download data summaries</p>
+              <p className="text-white font-bold">Calendar</p>
+              <p className="text-xs text-slate-500">Manage reservations</p>
             </div>
           </button>
         </div>

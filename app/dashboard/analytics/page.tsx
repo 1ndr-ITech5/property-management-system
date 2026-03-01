@@ -40,32 +40,56 @@ const TYPE_EMOJIS: Record<PropertyType, string> = {
 
 type TimeRange = "this" | "3m" | "6m" | "1y";
 
+interface Reservation {
+    id: string;
+    propertyId: string;
+    ownerId: string;
+    guestName: string;
+    checkIn: string;
+    checkOut: string;
+    createdAt: any;
+}
+
 export default function AnalyticsPage() {
     const { currentUser } = useAuth();
     const [properties, setProperties] = useState<Property[]>([]);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
     const [timeRange, setTimeRange] = useState<TimeRange>("6m");
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!currentUser) return;
 
-        const q = query(
+        const qProps = query(
             collection(db, "properties"), 
             where("ownerId", "==", currentUser.uid),
             orderBy("createdAt", "desc")
         );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubProps = onSnapshot(qProps, (snapshot) => {
             const props = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             } as Property));
             setProperties(props);
+        });
+
+        const qRes = query(
+            collection(db, "reservations"),
+            where("ownerId", "==", currentUser.uid)
+        );
+        const unsubRes = onSnapshot(qRes, (snapshot) => {
+            const resData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Reservation));
+            setReservations(resData);
             setLoading(false);
         });
-        return () => unsubscribe();
+
+        return () => { unsubProps(); unsubRes(); };
     }, [currentUser]);
 
-    // --- DATA ENGINE: Real-time ONLY ---
+    // --- DATA ENGINE: Real Reservations ---
     const chartData = useMemo(() => {
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const now = new Date();
@@ -76,17 +100,23 @@ export default function AnalyticsPage() {
         
         if (timeRange === "this") {
             const weeks = ["Week 1", "Week 2", "Week 3", "Week 4"];
-            const realBookedCount = properties.filter(p => p.status === "booked").length;
-            const realAvailCount = properties.filter(p => p.status === "available").length;
+            const currentMonthRes = reservations.filter(r => {
+                const d = new Date(r.checkIn);
+                return d.getMonth() === curM && d.getFullYear() === curY;
+            });
             
             return weeks.map((w, i) => {
                 const progress = (i + 1) / 4;
+                const bookedCount = currentMonthRes.length;
                 return {
                     name: w,
-                    booked: Math.round(realBookedCount * progress),
-                    available: Math.round(realAvailCount * progress),
-                    revenue: properties.filter(p => p.status === "booked").reduce((a, b) => a + b.price, 0) * progress,
-                    occupancy: properties.length > 0 ? Math.round((realBookedCount / properties.length) * 100 * progress) : 0,
+                    booked: Math.round(bookedCount * progress * 10), // Scale for visual
+                    available: Math.round(properties.length * 30 * progress),
+                    revenue: currentMonthRes.reduce((acc, r) => {
+                        const p = properties.find(prop => prop.id === r.propertyId);
+                        return acc + (p?.price || 0);
+                    }, 0) * progress,
+                    occupancy: properties.length > 0 ? Math.round((bookedCount / properties.length) * 100 * progress) : 0,
                 };
             });
         }
@@ -98,42 +128,46 @@ export default function AnalyticsPage() {
             const year = d.getFullYear();
             const monthName = months[mIdx];
 
-            const monthProps = properties.filter(p => {
-                if (!p.createdAt) return false;
-                const pd = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
-                return pd.getMonth() === mIdx && pd.getFullYear() === year;
+            const monthReservations = reservations.filter(r => {
+                const rd = new Date(r.checkIn);
+                return rd.getMonth() === mIdx && rd.getFullYear() === year;
             });
 
-            const booked = monthProps.filter(p => p.status === "booked").length;
-            const available = monthProps.filter(p => p.status === "available").length;
-            const revenue = monthProps.filter(p => p.status === "booked").reduce((a, b) => a + b.price, 0);
-            const occupancy = monthProps.length > 0 ? Math.round((booked / monthProps.length) * 100) : 0;
+            const booked = monthReservations.length;
+            const revenue = monthReservations.reduce((acc, r) => {
+                const p = properties.find(prop => prop.id === r.propertyId);
+                return acc + (p?.price || 0);
+            }, 0);
+            const occupancy = properties.length > 0 ? Math.round((booked / properties.length) * 100) : 0;
 
             result.push({
                 name: monthName,
-                booked,
-                available,
+                booked: booked * 15, // Scale for visual consistency
+                available: properties.length * 30 - (booked * 15),
                 revenue,
                 occupancy
             });
         }
         return result;
-    }, [properties, timeRange]);
+    }, [properties, reservations, timeRange]);
 
     // --- KPI Aggregation ---
     const kpis = useMemo(() => {
-        const booked = properties.filter(p => p.status === "booked").length;
         const total = properties.length;
-        const occupancy = total > 0 ? Math.round((booked / total) * 100) : 0;
-        const revenue = properties.filter(p => p.status === "booked").reduce((a, b) => a + b.price, 0);
+        const booked = reservations.length;
+        const revenue = reservations.reduce((acc, r) => {
+            const p = properties.find(prop => prop.id === r.propertyId);
+            return acc + (p?.price || 0);
+        }, 0);
+        const avgOccupancy = total > 0 ? Math.round((booked / (total * 12)) * 100) : 0;
 
         return [
             { title: "Total Properties", value: total, icon: Building2, color: "text-blue-400", bg: "bg-blue-500/10" },
-            { title: "Current Bookings", value: booked, icon: BookmarkCheck, color: "text-purple-400", bg: "bg-purple-500/10" },
-            { title: "Avg. Occupancy", value: `${occupancy}%`, icon: Percent, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-            { title: "Current Revenue", value: `$${Math.round(revenue).toLocaleString()}`, icon: DollarSign, color: "text-amber-400", bg: "bg-amber-500/10" }
+            { title: "Total Bookings", value: booked, icon: BookmarkCheck, color: "text-purple-400", bg: "bg-purple-500/10" },
+            { title: "Historical Occupancy", value: `${avgOccupancy}%`, icon: Percent, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+            { title: "Total Revenue", value: `$${Math.round(revenue).toLocaleString()}`, icon: DollarSign, color: "text-amber-400", bg: "bg-amber-500/10" }
         ];
-    }, [properties]);
+    }, [properties, reservations]);
 
     // --- Unit Type Distribution Logic ---
     const typeDistribution = useMemo(() => {

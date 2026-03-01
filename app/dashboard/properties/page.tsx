@@ -10,9 +10,20 @@ import { Search, MapPin, BedDouble, Bath, Plus, Filter, MoreHorizontal } from "l
 import AddPropertyModal from "@/components/AddPropertyModal";
 import EditPropertyModal from "@/components/EditPropertyModal";
 import PropertyDetailsModal from "@/components/PropertyDetailsModal";
+import AddReservationModal from "@/components/AddReservationModal";
 import Toast from "@/components/Toast";
 
 import { PropertyType } from "../page";
+
+interface Reservation {
+    id: string;
+    propertyId: string;
+    ownerId: string;
+    guestName: string;
+    checkIn: string;
+    checkOut: string;
+    createdAt: any;
+}
 
 interface Property {
     id: string;
@@ -30,10 +41,12 @@ interface Property {
 
 export default function PropertiesPage() {
     const [properties, setProperties] = useState<Property[]>([]);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
     const [fetching, setFetching] = useState(true);
     const [isAdding, setIsAdding] = useState(false);
     const [editingProperty, setEditingProperty] = useState<Property | null>(null);
     const [viewingProperty, setViewingProperty] = useState<Property | null>(null);
+    const [bookingProperty, setBookingProperty] = useState<Property | null>(null);
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
     const [search, setSearch] = useState("");
@@ -48,13 +61,15 @@ export default function PropertiesPage() {
         if (!currentUser) return;
 
         setFetching(true);
-        const q = query(
+        
+        // Properties Query
+        const qProps = query(
             collection(db, "properties"), 
             where("ownerId", "==", currentUser.uid),
             orderBy("createdAt", "desc")
         );
 
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const unsubProps = onSnapshot(qProps, (querySnapshot) => {
             const props: Property[] = [];
             querySnapshot.forEach((docSnap) => {
                 const data = docSnap.data();
@@ -76,7 +91,22 @@ export default function PropertiesPage() {
             setFetching(false);
         });
 
-        return () => unsubscribe();
+        // Reservations Query
+        const qRes = query(
+            collection(db, "reservations"),
+            where("ownerId", "==", currentUser.uid)
+        );
+
+        const unsubRes = onSnapshot(qRes, (snap) => {
+            const resData: Reservation[] = [];
+            snap.forEach(doc => resData.push({ id: doc.id, ...doc.data() } as Reservation));
+            setReservations(resData);
+        });
+
+        return () => {
+            unsubProps();
+            unsubRes();
+        };
     }, [currentUser]);
 
     const showToast = (message: string, type: "success" | "error") => {
@@ -84,7 +114,16 @@ export default function PropertiesPage() {
     };
 
     const transformedProperties = useMemo(() => {
-        let result = [...properties];
+        const now = new Date().toISOString().split('T')[0];
+        
+        let result = properties.map(p => {
+            const isCurrentlyBooked = reservations.some(r => 
+                r.propertyId === p.id && 
+                now >= r.checkIn && 
+                now <= r.checkOut
+            );
+            return { ...p, status: isCurrentlyBooked ? "booked" : ("available" as const) };
+        });
 
         // Search Filter
         if (search) {
@@ -119,7 +158,7 @@ export default function PropertiesPage() {
         });
 
         return result;
-    }, [properties, search, statusFilter, typeFilter, sortKey, sortOrder]);
+    }, [properties, reservations, search, statusFilter, typeFilter, sortKey, sortOrder]);
 
     const handleAddProperty = async (
         name: string, 
@@ -131,16 +170,11 @@ export default function PropertiesPage() {
         bathrooms: number,
         location: string
     ) => {
-        if (!currentUser) {
-            console.error("DEBUG: No currentUser found in handleAddProperty (Properties Page)");
-            return;
-        }
-
-        console.log("DEBUG: handleAddProperty started for user:", currentUser.uid);
+        if (!currentUser) return;
 
         try {
             setLoading(true);
-            const docRef = await addDoc(collection(db, "properties"), {
+            await addDoc(collection(db, "properties"), {
                 name,
                 price,
                 status,
@@ -153,12 +187,35 @@ export default function PropertiesPage() {
                 ownerId: currentUser.uid,
             });
 
-            console.log("DEBUG: Firestore addDoc successful. Doc ID:", docRef.id);
             setIsAdding(false);
             showToast("Property added successfully!", "success");
         } catch (e) {
-            console.error("DEBUG: Firestore error in handleAddProperty:", e);
+            console.error("Error adding document: ", e);
             showToast("Error adding property.", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAddReservation = async (guestName: string, checkIn: string, checkOut: string) => {
+        if (!currentUser || !bookingProperty) return;
+
+        try {
+            setLoading(true);
+            await addDoc(collection(db, "reservations"), {
+                propertyId: bookingProperty.id,
+                ownerId: currentUser.uid,
+                guestName,
+                checkIn,
+                checkOut,
+                createdAt: serverTimestamp()
+            });
+            
+            setBookingProperty(null);
+            showToast("Booking confirmed successfully!", "success");
+        } catch (e) {
+            console.error(e);
+            showToast("Failed to create booking.", "error");
         } finally {
             setLoading(false);
         }
@@ -345,8 +402,16 @@ export default function PropertiesPage() {
                                 </div>
 
                                 <div className="p-6 flex flex-col flex-1">
-                                    <div className="mb-2">
+                                    <div className="mb-2 flex justify-between items-center">
                                         <h3 className="text-lg font-bold text-white leading-tight line-clamp-1 group-hover:text-purple-400 transition-colors">{property.name}</h3>
+                                        {property.status === 'available' && (
+                                            <button 
+                                                onClick={() => setBookingProperty(property)}
+                                                className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 uppercase tracking-widest bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20 transition-all"
+                                            >
+                                                Book Now
+                                            </button>
+                                        )}
                                     </div>
 
                                     <div className="flex items-center gap-1.5 text-slate-400 text-xs font-medium mb-3">
@@ -409,6 +474,14 @@ export default function PropertiesPage() {
                 isOpen={!!viewingProperty}
                 onClose={() => setViewingProperty(null)}
                 property={viewingProperty}
+            />
+
+            <AddReservationModal
+                isOpen={!!bookingProperty}
+                onClose={() => setBookingProperty(null)}
+                onAdd={handleAddReservation}
+                loading={loading}
+                propertyName={bookingProperty?.name || ""}
             />
 
             {toast && (

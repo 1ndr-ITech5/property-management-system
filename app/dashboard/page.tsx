@@ -35,6 +35,7 @@ import BookingsChart from "@/components/BookingsChart";
 // Modular Components
 import AddPropertyModal from "@/components/AddPropertyModal";
 import Toast from "@/components/Toast";
+import { logActivity } from "@/lib/activity";
 
 export type PropertyType = "Vila" | "Hotel" | "Apartment" | "Guesthouse";
 
@@ -220,7 +221,7 @@ export default function DashboardPage() {
             trendUp: true,
             icon: Home,
             color: "text-emerald-400",
-            chartData: history.map(h => ({ name: h.name, val: availableCount })), // Availability is a point-in-time snapshot
+            chartData: history.map(h => ({ name: h.name, val: availableCount })),
             details: [
                 { label: "Ready Now", value: availableCount, color: "text-emerald-400" },
                 { label: "Currently Booked", value: bookedCount, color: "text-rose-400" },
@@ -265,7 +266,7 @@ export default function DashboardPage() {
             trendUp: futureBookings > 0,
             icon: CheckCircle2,
             color: "text-blue-400",
-            chartData: history.map(h => ({ name: h.name, val: 0 })), // Historical "future" is 0
+            chartData: history.map(h => ({ name: h.name, val: 0 })), 
             details: [
                 { label: "Confirmed Future", value: futureBookings, color: "text-blue-400" },
                 { label: "Next Reservation", value: reservations.filter(r => r.checkIn > todayStr).sort((a,b) => a.checkIn.localeCompare(b.checkIn))[0]?.checkIn || "None", color: "text-indigo-400" },
@@ -301,6 +302,14 @@ export default function DashboardPage() {
         createdAt: serverTimestamp(),
         ownerId: currentUser.uid,
       });
+
+      await logActivity(
+        currentUser.uid,
+        "property",
+        "New Property Added",
+        `${name} has been successfully added to your portfolio.`
+      );
+
       setIsAdding(false);
       showToast("Prona u shtua me sukses!", "success");
     } catch (e) {

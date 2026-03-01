@@ -3,9 +3,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Home, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Home, Plus, Info } from "lucide-react";
 import AddReservationModal from "@/components/AddReservationModal";
 import Toast from "@/components/Toast";
 import { PropertyType } from "../page";
@@ -23,6 +23,9 @@ interface Property {
     id: string;
     name: string;
     type: PropertyType;
+    maxCapacity: number;
+    currentBookings: number;
+    status: "available" | "booked" | "unavailable";
 }
 
 export default function CalendarPage() {
@@ -41,7 +44,16 @@ export default function CalendarPage() {
         const qProps = query(collection(db, "properties"), where("ownerId", "==", currentUser.uid));
         const unsubProps = onSnapshot(qProps, (snap) => {
             const pData: Property[] = [];
-            snap.forEach(doc => pData.push({ id: doc.id, ...doc.data() } as Property));
+            snap.forEach(doc => {
+                const data = doc.data();
+                pData.push({ 
+                    id: doc.id, 
+                    ...data,
+                    maxCapacity: data.maxCapacity || 1,
+                    currentBookings: data.currentBookings || 0,
+                    status: data.status || "available"
+                } as Property);
+            });
             setProperties(pData);
         });
 
@@ -77,8 +89,16 @@ export default function CalendarPage() {
 
     const handleAddReservation = async (guestName: string, checkIn: string, checkOut: string) => {
         if (!currentUser || !bookingProperty) return;
+
+        if (bookingProperty.currentBookings >= bookingProperty.maxCapacity) {
+            setToast({ message: "Property is already at full capacity.", type: "error" });
+            return;
+        }
+
         try {
             setLoading(true);
+            
+            // 1. Create Reservation
             await addDoc(collection(db, "reservations"), {
                 propertyId: bookingProperty.id,
                 ownerId: currentUser.uid,
@@ -87,6 +107,16 @@ export default function CalendarPage() {
                 checkOut,
                 createdAt: serverTimestamp()
             });
+
+            // 2. Update Property
+            const newCount = (bookingProperty.currentBookings || 0) + 1;
+            const newStatus = newCount >= bookingProperty.maxCapacity ? "booked" : bookingProperty.status;
+            
+            await updateDoc(doc(db, "properties", bookingProperty.id), {
+                currentBookings: newCount,
+                status: newStatus
+            });
+
             setBookingProperty(null);
             setToast({ message: "Booking confirmed!", type: "success" });
         } catch (e) {
@@ -136,7 +166,7 @@ export default function CalendarPage() {
                                     {dayReservations.map(r => {
                                         const prop = properties.find(p => p.id === r.propertyId);
                                         return (
-                                            <div key={r.id} className="px-2 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex flex-col gap-0.5">
+                                            <div key={r.id} className="px-2 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex flex-col gap-0.5 shadow-sm">
                                                 <span className="text-[9px] font-black text-indigo-300 uppercase truncate leading-none">{prop?.name}</span>
                                                 <span className="text-[8px] font-bold text-slate-400 truncate leading-none">{r.guestName}</span>
                                             </div>
@@ -144,9 +174,12 @@ export default function CalendarPage() {
                                     })}
                                 </div>
 
-                                {dayReservations.length === 0 && (
+                                {dayReservations.length === 0 && properties.some(p => p.status === 'available') && (
                                     <button 
-                                        onClick={() => properties.length > 0 && setBookingProperty(properties[0])}
+                                        onClick={() => {
+                                            const avail = properties.find(p => p.status === 'available');
+                                            if (avail) setBookingProperty(avail);
+                                        }}
                                         className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 flex items-center justify-center border border-white/5"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
@@ -155,6 +188,22 @@ export default function CalendarPage() {
                             </div>
                         );
                     })}
+                </div>
+            </div>
+
+            {/* Quick Legend */}
+            <div className="mt-8 flex flex-wrap gap-6 px-4">
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Available</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-rose-500" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Full / Booked</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-slate-500" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Unavailable</span>
                 </div>
             </div>
 

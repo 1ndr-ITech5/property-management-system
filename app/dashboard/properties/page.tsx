@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, where } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, MapPin, BedDouble, Bath, Plus, Filter, MoreHorizontal } from "lucide-react";
+import { Search, MapPin, Plus, TrendingUp } from "lucide-react";
 
 import AddPropertyModal from "@/components/AddPropertyModal";
 import EditPropertyModal from "@/components/EditPropertyModal";
@@ -29,12 +29,14 @@ interface Property {
     id: string;
     name: string;
     price: number;
-    status: "available" | "booked";
+    status: "available" | "booked" | "unavailable";
     type: PropertyType;
     description: string;
     bedrooms: number;
     bathrooms: number;
     location: string;
+    maxCapacity: number;
+    currentBookings: number;
     createdAt: any;
     image?: string;
 }
@@ -50,7 +52,7 @@ export default function PropertiesPage() {
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
     const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState<"all" | "available" | "booked">("all");
+    const [statusFilter, setStatusFilter] = useState<"all" | "available" | "booked" | "unavailable">("all");
     const [typeFilter, setTypeFilter] = useState<"all" | PropertyType>("all");
     const [sortKey, setSortKey] = useState<"name" | "price">("name");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -81,13 +83,12 @@ export default function PropertiesPage() {
                     bedrooms: data.bedrooms || 1,
                     bathrooms: data.bathrooms || 1,
                     location: data.location || "Unknown",
+                    maxCapacity: data.maxCapacity || 1,
+                    currentBookings: data.currentBookings || 0,
+                    status: data.status || "available"
                 } as Property);
             });
             setProperties(props);
-            setFetching(false);
-        }, (error) => {
-            console.error("Error listening to properties: ", error);
-            showToast("Error loading properties.", "error");
             setFetching(false);
         });
 
@@ -114,15 +115,15 @@ export default function PropertiesPage() {
     };
 
     const transformedProperties = useMemo(() => {
-        const now = new Date().toISOString().split('T')[0];
-        
         let result = properties.map(p => {
-            const isCurrentlyBooked = reservations.some(r => 
-                r.propertyId === p.id && 
-                now >= r.checkIn && 
-                now <= r.checkOut
-            );
-            return { ...p, status: isCurrentlyBooked ? "booked" : ("available" as const) };
+            // A property is also considered booked if its currentBookings >= maxCapacity
+            let derivedStatus = p.status;
+            if (p.status !== "unavailable") {
+                if (p.currentBookings >= p.maxCapacity) {
+                    derivedStatus = "booked";
+                }
+            }
+            return { ...p, status: derivedStatus };
         });
 
         // Search Filter
@@ -158,17 +159,18 @@ export default function PropertiesPage() {
         });
 
         return result;
-    }, [properties, reservations, search, statusFilter, typeFilter, sortKey, sortOrder]);
+    }, [properties, statusFilter, typeFilter, sortKey, sortOrder, search]);
 
     const handleAddProperty = async (
         name: string, 
         price: number, 
-        status: "available" | "booked", 
+        status: "available" | "booked" | "unavailable", 
         type: PropertyType,
         description: string,
         bedrooms: number,
         bathrooms: number,
-        location: string
+        location: string,
+        maxCapacity: number
     ) => {
         if (!currentUser) return;
 
@@ -183,6 +185,8 @@ export default function PropertiesPage() {
                 bedrooms: bedrooms || 1,
                 bathrooms: bathrooms || 1,
                 location: location.trim() || "Unknown",
+                maxCapacity: maxCapacity || 1,
+                currentBookings: 0,
                 createdAt: serverTimestamp(),
                 ownerId: currentUser.uid,
             });
@@ -190,7 +194,7 @@ export default function PropertiesPage() {
             setIsAdding(false);
             showToast("Property added successfully!", "success");
         } catch (e) {
-            console.error("Error adding document: ", e);
+            console.error(e);
             showToast("Error adding property.", "error");
         } finally {
             setLoading(false);
@@ -200,8 +204,15 @@ export default function PropertiesPage() {
     const handleAddReservation = async (guestName: string, checkIn: string, checkOut: string) => {
         if (!currentUser || !bookingProperty) return;
 
+        if (bookingProperty.currentBookings >= bookingProperty.maxCapacity) {
+            alert("Maximum capacity reached for this property.");
+            return;
+        }
+
         try {
             setLoading(true);
+            
+            // 1. Create Reservation
             await addDoc(collection(db, "reservations"), {
                 propertyId: bookingProperty.id,
                 ownerId: currentUser.uid,
@@ -209,6 +220,16 @@ export default function PropertiesPage() {
                 checkIn,
                 checkOut,
                 createdAt: serverTimestamp()
+            });
+
+            // 2. Increment Current Bookings & Update Status if necessary
+            const newCount = (bookingProperty.currentBookings || 0) + 1;
+            const newStatus = newCount >= bookingProperty.maxCapacity ? "booked" : bookingProperty.status;
+            
+            const propRef = doc(db, "properties", bookingProperty.id);
+            await updateDoc(propRef, {
+                currentBookings: newCount,
+                status: newStatus
             });
             
             setBookingProperty(null);
@@ -241,12 +262,13 @@ export default function PropertiesPage() {
         id: string, 
         name: string, 
         price: number, 
-        status: "available" | "booked", 
+        status: "available" | "booked" | "unavailable", 
         type: PropertyType,
         description: string,
         bedrooms: number,
         bathrooms: number,
-        location: string
+        location: string,
+        maxCapacity: number
     ) => {
         if (!currentUser) return;
 
@@ -262,6 +284,7 @@ export default function PropertiesPage() {
                 bedrooms: bedrooms || 1,
                 bathrooms: bathrooms || 1,
                 location: location.trim() || "Unknown",
+                maxCapacity: maxCapacity || 1,
             });
 
             setEditingProperty(null);
@@ -303,7 +326,6 @@ export default function PropertiesPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                        {/* Type Filter */}
                         <select
                             value={typeFilter}
                             onChange={(e) => setTypeFilter(e.target.value as any)}
@@ -316,7 +338,6 @@ export default function PropertiesPage() {
                             <option value="Guesthouse" className="bg-slate-900">Guesthouses</option>
                         </select>
 
-                        {/* Status Filter */}
                         <select
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -325,9 +346,9 @@ export default function PropertiesPage() {
                             <option value="all" className="bg-slate-900">All Status</option>
                             <option value="available" className="bg-slate-900">Available</option>
                             <option value="booked" className="bg-slate-900">Booked</option>
+                            <option value="unavailable" className="bg-slate-900">Unavailable</option>
                         </select>
 
-                        {/* Sort */}
                         <div className="flex items-center gap-2">
                             <select
                                 value={sortKey}
@@ -340,7 +361,6 @@ export default function PropertiesPage() {
                             <button
                                 onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
                                 className="p-2.5 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
-                                title={sortOrder === 'asc' ? "Ascending" : "Descending"}
                             >
                                 {sortOrder === 'asc' ? '↑' : '↓'}
                             </button>
@@ -361,11 +381,6 @@ export default function PropertiesPage() {
                     <div className="w-12 h-12 border-4 border-white/10 border-t-purple-500 rounded-full animate-spin mb-4" />
                     <p className="text-slate-400 font-medium animate-pulse">Syncing directory...</p>
                 </div>
-            ) : transformedProperties.length === 0 ? (
-                <div className="glass-panel p-16 rounded-3xl text-center border-dashed relative z-10">
-                    <h3 className="text-2xl font-bold text-white mb-2">No units found</h3>
-                    <p className="text-slate-400">Try adjusting your search or add a new property.</p>
-                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
                     <AnimatePresence>
@@ -380,12 +395,13 @@ export default function PropertiesPage() {
                                 className="glass-card rounded-[2rem] overflow-hidden flex flex-col group h-full"
                             >
                                 <div className="h-40 bg-gradient-to-br from-white/10 to-white/0 relative flex items-center justify-center border-b border-white/10 group-hover:from-white/20 transition-all shrink-0">
-                                    {/* Status Badge - Top Left */}
                                     <div className="absolute top-4 left-4 z-10">
                                         <span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg border backdrop-blur-md ${
                                             property.status === 'available' 
                                                 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
-                                                : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                                                : property.status === 'booked' 
+                                                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                                                    : 'bg-slate-500/20 text-slate-400 border-white/10'
                                         }`}>
                                             {property.status}
                                         </span>
@@ -395,7 +411,6 @@ export default function PropertiesPage() {
                                         {typeEmojis[property.type]}
                                     </span>
 
-                                    {/* Price Badge - Top Right */}
                                     <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 text-[10px] font-black text-white shadow-lg">
                                         ${property.price} / night
                                     </div>
@@ -419,11 +434,17 @@ export default function PropertiesPage() {
                                         {property.location}
                                     </div>
 
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="flex items-center gap-1 text-[10px] font-black text-slate-500 uppercase tracking-widest bg-white/5 px-2 py-1 rounded-lg border border-white/5">
+                                            <TrendingUp className="w-3 h-3 text-indigo-400" />
+                                            <span>{property.currentBookings} / {property.maxCapacity} Bookings</span>
+                                        </div>
+                                    </div>
+
                                     <p className="text-[13px] text-slate-400 leading-relaxed line-clamp-2 mb-6 italic min-h-[2.5rem]">
                                         "{property.description}"
                                     </p>
 
-                                    {/* Middle Section: View Details Button */}
                                     <div className="mt-auto">
                                         <button
                                             onClick={() => setViewingProperty(property)}
@@ -432,7 +453,6 @@ export default function PropertiesPage() {
                                             View Details
                                         </button>
 
-                                        {/* Actions Footer - Edit / Delete */}
                                         <div className="grid grid-cols-2 gap-3 pt-5 border-t border-white/10">
                                             <button
                                                 onClick={() => setEditingProperty(property)}

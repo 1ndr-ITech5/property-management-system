@@ -11,12 +11,13 @@ interface AddPropertyModalProps {
     onAdd: (
         name: string, 
         price: number, 
-        status: "available" | "booked", 
+        status: "available" | "booked" | "unavailable", 
         type: PropertyType,
         description: string,
         bedrooms: number,
         bathrooms: number,
-        location: string
+        location: string,
+        maxCapacity: number
     ) => Promise<void>;
     loading: boolean;
 }
@@ -24,49 +25,41 @@ interface AddPropertyModalProps {
 export default function AddPropertyModal({ isOpen, onClose, onAdd, loading }: AddPropertyModalProps) {
     const [name, setName] = useState("");
     const [price, setPrice] = useState<number>(0);
-    const [status, setStatus] = useState<"available" | "booked">("available");
+    const [status, setStatus] = useState<"available" | "booked" | "unavailable">("available");
     const [type, setType] = useState<PropertyType>("Vila");
     const [description, setDescription] = useState("");
     const [bedrooms, setBedrooms] = useState<number>(1);
     const [bathrooms, setBathrooms] = useState<number>(1);
     const [location, setLocation] = useState("");
+    const [maxCapacity, setMaxCapacity] = useState<number>(1);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        console.log("DEBUG: AddPropertyModal submission started");
-        console.log("Data:", { name, price, status, type, description, bedrooms, bathrooms, location });
+        if (!name || !price) return;
 
-        if (!name || !price) {
-            console.error("DEBUG: Name or Price is missing");
-            return;
-        }
-
-        try {
-            await onAdd(
-                name, 
-                price, 
-                status, 
-                type, 
-                description || "No description yet", 
-                bedrooms || 1, 
-                bathrooms || 1, 
-                location || "Unknown"
-            );
-            console.log("DEBUG: onAdd callback executed successfully");
-            
-            if (!loading) {
-                setName("");
-                setPrice(0);
-                setStatus("available");
-                setType("Vila");
-                setDescription("");
-                setBedrooms(1);
-                setBathrooms(1);
-                setLocation("");
-            }
-        } catch (err) {
-            console.error("DEBUG: Error in onAdd callback:", err);
+        await onAdd(
+            name, 
+            price, 
+            status, 
+            type, 
+            description || "No description yet", 
+            bedrooms || 1, 
+            bathrooms || 1, 
+            location || "Unknown",
+            maxCapacity || 1
+        );
+        
+        if (!loading) {
+            setName("");
+            setPrice(0);
+            setStatus("available");
+            setType("Vila");
+            setDescription("");
+            setBedrooms(1);
+            setBathrooms(1);
+            setLocation("");
+            setMaxCapacity(1);
         }
     };
 
@@ -77,7 +70,7 @@ export default function AddPropertyModal({ isOpen, onClose, onAdd, loading }: Ad
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl"
+                    className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl"
                 >
                     <motion.div
                         initial={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -172,16 +165,30 @@ export default function AddPropertyModal({ isOpen, onClose, onAdd, loading }: Ad
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Initial Status</label>
-                                <select
-                                    className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner appearance-none"
-                                    value={status}
-                                    onChange={(e) => setStatus(e.target.value as "available" | "booked")}
-                                >
-                                    <option value="available" className="bg-slate-900">Available</option>
-                                    <option value="booked" className="bg-slate-900">Booked</option>
-                                </select>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Initial Status</label>
+                                    <select
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner appearance-none"
+                                        value={status}
+                                        onChange={(e) => setStatus(e.target.value as any)}
+                                    >
+                                        <option value="available" className="bg-slate-900">Available</option>
+                                        <option value="booked" className="bg-slate-900">Booked</option>
+                                        <option value="unavailable" className="bg-slate-900">Unavailable</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Max Capacity (Units/Spots)</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        required
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner"
+                                        value={maxCapacity}
+                                        onChange={(e) => setMaxCapacity(Number(e.target.value))}
+                                    />
+                                </div>
                             </div>
 
                             <div className="flex gap-4 pt-6 mt-2 border-t border-white/5">

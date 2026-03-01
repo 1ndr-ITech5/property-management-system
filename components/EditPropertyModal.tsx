@@ -9,12 +9,14 @@ interface Property {
     id: string;
     name: string;
     price: number;
-    status: "available" | "booked";
+    status: "available" | "booked" | "unavailable";
     type: PropertyType;
     description: string;
     bedrooms: number;
     bathrooms: number;
     location: string;
+    maxCapacity: number;
+    currentBookings: number;
     createdAt: any;
 }
 
@@ -26,12 +28,13 @@ interface EditPropertyModalProps {
         id: string, 
         name: string, 
         price: number, 
-        status: "available" | "booked", 
+        status: "available" | "booked" | "unavailable", 
         type: PropertyType,
         description: string,
         bedrooms: number,
         bathrooms: number,
-        location: string
+        location: string,
+        maxCapacity: number
     ) => Promise<void>;
     loading: boolean;
 }
@@ -39,12 +42,13 @@ interface EditPropertyModalProps {
 export default function EditPropertyModal({ isOpen, onClose, property, onUpdate, loading }: EditPropertyModalProps) {
     const [name, setName] = useState("");
     const [price, setPrice] = useState<number>(0);
-    const [status, setStatus] = useState<"available" | "booked">("available");
+    const [status, setStatus] = useState<"available" | "booked" | "unavailable">("available");
     const [type, setType] = useState<PropertyType>("Vila");
     const [description, setDescription] = useState("");
     const [bedrooms, setBedrooms] = useState<number>(1);
     const [bathrooms, setBathrooms] = useState<number>(1);
     const [location, setLocation] = useState("");
+    const [maxCapacity, setMaxCapacity] = useState<number>(1);
 
     useEffect(() => {
         if (property) {
@@ -56,6 +60,7 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
             setBedrooms(property.bedrooms || 1);
             setBathrooms(property.bathrooms || 1);
             setLocation(property.location || "");
+            setMaxCapacity(property.maxCapacity || 1);
         }
     }, [property]);
 
@@ -72,7 +77,8 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
             description || "No description yet", 
             bedrooms || 1, 
             bathrooms || 1, 
-            location || "Unknown"
+            location || "Unknown",
+            maxCapacity || 1
         );
     };
 
@@ -83,7 +89,7 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl"
+                    className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl"
                 >
                     <motion.div
                         initial={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -176,16 +182,30 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Current Status</label>
-                                <select
-                                    className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner appearance-none"
-                                    value={status}
-                                    onChange={(e) => setStatus(e.target.value as "available" | "booked")}
-                                >
-                                    <option value="available" className="bg-slate-900">Available</option>
-                                    <option value="booked" className="bg-slate-900">Booked</option>
-                                </select>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Current Status</label>
+                                    <select
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner appearance-none"
+                                        value={status}
+                                        onChange={(e) => setStatus(e.target.value as any)}
+                                    >
+                                        <option value="available" className="bg-slate-900">Available</option>
+                                        <option value="booked" className="bg-slate-900">Booked</option>
+                                        <option value="unavailable" className="bg-slate-900">Unavailable</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Max Capacity</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        required
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner"
+                                        value={maxCapacity}
+                                        onChange={(e) => setMaxCapacity(Number(e.target.value))}
+                                    />
+                                </div>
                             </div>
 
                             <div className="flex gap-4 pt-6 mt-2 border-t border-white/5">
@@ -201,7 +221,7 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
                                     disabled={loading}
                                     className="flex-1 rounded-2xl bg-indigo-500 hover:bg-indigo-600 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 disabled:opacity-50 transition-all border border-indigo-400/50"
                                 >
-                                    {loading ? "Saving..." : "Update"}
+                                    {loading ? "Updating..." : "Update Property"}
                                 </button>
                             </div>
                         </form>

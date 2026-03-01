@@ -7,12 +7,14 @@ interface Property {
     id: string;
     name: string;
     price: number;
-    status: "available" | "booked";
+    status: "available" | "booked" | "unavailable";
     type: PropertyType;
     location: string;
     description: string;
     bedrooms: number;
     bathrooms: number;
+    maxCapacity: number;
+    currentBookings: number;
     createdAt: any;
 }
 
@@ -50,12 +52,17 @@ export default function PropertyCard({ property, onEdit, onDelete }: PropertyCar
                         <h3 className="text-lg font-bold text-white line-clamp-1 group-hover:text-indigo-400 transition-colors">
                             {property.name}
                         </h3>
-                        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider backdrop-blur-md border ${
+                        <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[9px] font-black uppercase tracking-wider backdrop-blur-md border ${
                             property.status === 'available'
                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                : property.status === 'booked'
+                                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                    : 'bg-slate-500/10 text-slate-400 border-white/10'
                         }`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${property.status === 'available' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
+                            <span className={`h-1.5 w-1.5 rounded-full ${
+                                property.status === 'available' ? 'bg-emerald-400 animate-pulse' : 
+                                property.status === 'booked' ? 'bg-rose-400' : 'bg-slate-400'
+                            }`}></span>
                             {property.status}
                         </div>
                     </div>
@@ -63,6 +70,12 @@ export default function PropertyCard({ property, onEdit, onDelete }: PropertyCar
                     <div className="flex items-center gap-1 text-slate-400 text-xs font-medium mb-3">
                         <MapPin className="w-3.5 h-3.5 text-indigo-400" />
                         <span className="truncate">{property.location}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-4">
+                        <div className="flex items-center gap-1 text-[9px] font-black text-slate-500 uppercase tracking-widest bg-white/5 px-2 py-1 rounded-lg border border-white/5">
+                            <span>{property.currentBookings} / {property.maxCapacity} Booked</span>
+                        </div>
                     </div>
 
                     <p className="text-[13px] text-slate-400 leading-relaxed line-clamp-2 mb-4 italic min-h-[2.5rem]">

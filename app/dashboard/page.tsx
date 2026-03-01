@@ -32,12 +32,14 @@ interface Property {
   id: string;
   name: string;
   price: number;
-  status: "available" | "booked";
+  status: "available" | "booked" | "unavailable";
   type: PropertyType;
   description: string;
   bedrooms: number;
   bathrooms: number;
   location: string;
+  maxCapacity: number;
+  currentBookings: number;
   createdAt: any;
 }
 
@@ -87,7 +89,10 @@ export default function DashboardPage() {
           description: data.description || "No description yet",
           bedrooms: data.bedrooms || 1,
           bathrooms: data.bathrooms || 1,
-          location: data.location || "Unknown"
+          location: data.location || "Unknown",
+          maxCapacity: data.maxCapacity || 1,
+          currentBookings: data.currentBookings || 0,
+          status: data.status || "available"
         } as Property);
       });
       setProperties(props);
@@ -128,6 +133,8 @@ export default function DashboardPage() {
         if (p.bedrooms === undefined) updates.bedrooms = 1;
         if (p.bathrooms === undefined) updates.bathrooms = 1;
         if (p.location === undefined || p.location === "City Center") updates.location = "Unknown";
+        if (p.maxCapacity === undefined) updates.maxCapacity = 1;
+        if (p.currentBookings === undefined) updates.currentBookings = 0;
 
         if (Object.keys(updates).length > 0) {
           batch.push(updateDoc(doc(db, "properties", p.id), updates));
@@ -162,6 +169,7 @@ export default function DashboardPage() {
     };
 
     const currentlyBookedCount = properties.filter(p => 
+        p.status === "booked" || 
         reservations.some(r => r.propertyId === p.id && todayStr >= r.checkIn && todayStr <= r.checkOut)
     ).length;
 
@@ -176,7 +184,7 @@ export default function DashboardPage() {
     return {
       currentBooked: currentlyBookedCount,
       bookedTrend: formatTrend(currentMonthTotal, prevMonthTotal),
-      currentAvailable: properties.length - currentlyBookedCount,
+      currentAvailable: properties.filter(p => p.status === "available").length,
       availableTrend: "0"
     };
   }, [properties, reservations]);
@@ -184,12 +192,13 @@ export default function DashboardPage() {
   const handleAddProperty = async (
     name: string, 
     price: number, 
-    status: "available" | "booked", 
+    status: "available" | "booked" | "unavailable", 
     type: PropertyType,
     description: string,
     bedrooms: number,
     bathrooms: number,
-    location: string
+    location: string,
+    maxCapacity: number
   ) => {
     if (!currentUser) return;
 
@@ -204,6 +213,8 @@ export default function DashboardPage() {
         bedrooms: bedrooms || 1,
         bathrooms: bathrooms || 1,
         location: location.trim() || "Unknown",
+        maxCapacity: maxCapacity || 1,
+        currentBookings: 0,
         createdAt: serverTimestamp(),
         ownerId: currentUser.uid,
       });
@@ -226,7 +237,7 @@ export default function DashboardPage() {
           <p className="text-slate-400 mt-1">Real-time property management overview.</p>
         </div>
         <div className="flex items-center gap-3">
-          {(properties.some(p => !p.type || !p.description || !p.bedrooms || !p.bathrooms || !p.location || p.location === "City Center")) && (
+          {(properties.some(p => !p.type || !p.description || !p.bedrooms || !p.bathrooms || !p.location || p.maxCapacity === undefined)) && (
             <button
               onClick={runMigration}
               disabled={loading}

@@ -3,11 +3,14 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, MapPin, BedDouble, Bath, Image as ImageIcon } from "lucide-react";
 
+import { PropertyType } from "@/app/dashboard/page";
+
 interface Property {
     id: string;
     name: string;
     price: number;
     status: "available" | "booked";
+    type: PropertyType;
     createdAt: any;
     location?: string;
     beds?: number;

@@ -12,11 +12,14 @@ import EditPropertyModal from "@/components/EditPropertyModal";
 import PropertyDetailsModal from "@/components/PropertyDetailsModal";
 import Toast from "@/components/Toast";
 
+import { PropertyType } from "../page";
+
 interface Property {
     id: string;
     name: string;
     price: number;
     status: "available" | "booked";
+    type: PropertyType;
     createdAt: any;
     location?: string;
     beds?: number;
@@ -49,11 +52,11 @@ export default function PropertiesPage() {
                 props.push({
                     id: docSnap.id,
                     ...data,
+                    type: data.type || "Vila",
                     // Use mock values if they don't exist yet in the DB
                     location: data.location || "City Center",
                     beds: data.beds || 2,
                     baths: data.baths || 1,
-                    image: data.image || "🏢"
                 } as Property);
             });
             setProperties(props);
@@ -76,7 +79,7 @@ export default function PropertiesPage() {
         return properties.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.location?.toLowerCase().includes(search.toLowerCase()));
     }, [properties, search]);
 
-    const handleAddProperty = async (name: string, price: number, status: "available" | "booked") => {
+    const handleAddProperty = async (name: string, price: number, status: "available" | "booked", type: PropertyType) => {
         if (!currentUser) return;
 
         if (!name.trim()) {
@@ -94,13 +97,13 @@ export default function PropertiesPage() {
                 name,
                 price,
                 status,
+                type,
                 createdAt: serverTimestamp(),
                 ownerId: currentUser.uid,
                 // Assign some random mock data for the new UI fields for now
                 location: ["Downtown City Center", "Northern Wilderness", "West Coast Strip", "Quiet Bay", "Arts District", "Harbor View"][Math.floor(Math.random() * 6)],
                 beds: Math.floor(Math.random() * 4) + 1,
                 baths: Math.floor(Math.random() * 3) + 1,
-                image: ["🏙️", "🏞️", "🌅", "🏖️", "🏭", "🏡"][Math.floor(Math.random() * 6)]
             });
 
             setIsAdding(false);
@@ -129,7 +132,7 @@ export default function PropertiesPage() {
         }
     };
 
-    const handleUpdateProperty = async (id: string, name: string, price: number, status: "available" | "booked") => {
+    const handleUpdateProperty = async (id: string, name: string, price: number, status: "available" | "booked", type: PropertyType) => {
         if (!currentUser) return;
 
         try {
@@ -139,6 +142,7 @@ export default function PropertiesPage() {
                 name,
                 price,
                 status,
+                type,
             });
 
             setEditingProperty(null);
@@ -149,6 +153,13 @@ export default function PropertiesPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const typeEmojis: Record<PropertyType, string> = {
+        Vila: "🏡",
+        Hotel: "🏨",
+        Apartment: "🏢",
+        Guesthouse: "🛏️"
     };
 
     return (
@@ -203,7 +214,7 @@ export default function PropertiesPage() {
                                 className="glass-card rounded-[2rem] overflow-hidden flex flex-col"
                             >
                                 <div className="h-40 bg-gradient-to-br from-white/10 to-white/0 relative flex items-center justify-center border-b border-white/10 group-hover:from-white/20 transition-all">
-                                    <span className="text-6xl filter drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]">{property.image}</span>
+                                    <span className="text-6xl filter drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]">{typeEmojis[property.type]}</span>
                                     <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-xs font-bold text-white shadow-lg">
                                         ${property.price} / night
                                     </div>

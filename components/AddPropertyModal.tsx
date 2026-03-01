@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+import { PropertyType } from "@/app/dashboard/page";
+
 interface AddPropertyModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onAdd: (name: string, price: number, status: "available" | "booked") => Promise<void>;
+    onAdd: (name: string, price: number, status: "available" | "booked", type: PropertyType) => Promise<void>;
     loading: boolean;
 }
 
@@ -14,15 +16,17 @@ export default function AddPropertyModal({ isOpen, onClose, onAdd, loading }: Ad
     const [name, setName] = useState("");
     const [price, setPrice] = useState<number>(0);
     const [status, setStatus] = useState<"available" | "booked">("available");
+    const [type, setType] = useState<PropertyType>("Vila");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onAdd(name, price, status);
+        await onAdd(name, price, status, type);
         // Reset form on success (caller handles closing)
         if (!loading) {
             setName("");
             setPrice(0);
             setStatus("available");
+            setType("Vila");
         }
     };
 
@@ -56,6 +60,19 @@ export default function AddPropertyModal({ isOpen, onClose, onAdd, loading }: Ad
                                     value={name}
                                     onChange={(e) => setName(e.target.value)}
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Property Type</label>
+                                <select
+                                    className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner appearance-none"
+                                    value={type}
+                                    onChange={(e) => setType(e.target.value as PropertyType)}
+                                >
+                                    <option value="Vila" className="bg-slate-900">🏡 Vila</option>
+                                    <option value="Hotel" className="bg-slate-900">🏨 Hotel</option>
+                                    <option value="Apartment" className="bg-slate-900">🏢 Apartment</option>
+                                    <option value="Guesthouse" className="bg-slate-900">🛏️ Guesthouse</option>
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Price per Night ($)</label>

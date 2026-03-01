@@ -5,35 +5,43 @@ import { motion } from "framer-motion";
 
 interface StatsProps {
     totalProperties: number;
-    occupancyRate: string;
-    monthlyRevenue: number;
+    bookedCount: number;
+    bookedTrend: string;
+    availableCount: number;
+    availableTrend: string;
 }
 
-export default function StatsCards({ totalProperties, occupancyRate, monthlyRevenue }: StatsProps) {
+export default function StatsCards({ 
+    totalProperties, 
+    bookedCount, 
+    bookedTrend, 
+    availableCount, 
+    availableTrend 
+}: StatsProps) {
     const cards = [
         {
             title: "Total Properties",
             value: totalProperties.toString(),
-            trend: "+12%",
+            trend: "+1",
             trendUp: true,
             icon: Building2,
             color: "from-blue-500 to-cyan-500",
             shadow: "shadow-cyan-500/20"
         },
         {
-            title: "Occupancy Rate",
-            value: occupancyRate,
-            trend: "+5.2%",
-            trendUp: true,
+            title: "Total Booked",
+            value: bookedCount.toString(),
+            trend: bookedTrend,
+            trendUp: !bookedTrend.startsWith("-"),
             icon: Percent,
             color: "from-emerald-400 to-teal-500",
             shadow: "shadow-emerald-500/20"
         },
         {
-            title: "Est. Revenue",
-            value: `$${monthlyRevenue.toLocaleString()}`,
-            trend: "-2.4%",
-            trendUp: false,
+            title: "Total Available",
+            value: availableCount.toString(),
+            trend: availableTrend,
+            trendUp: !availableTrend.startsWith("-"),
             icon: DollarSign,
             color: "from-purple-500 to-indigo-500",
             shadow: "shadow-purple-500/20"

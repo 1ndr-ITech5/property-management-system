@@ -60,6 +60,26 @@ export default function LoginPage() {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="w-full max-w-lg"
       >
+        <button
+          onClick={() => router.push("/")}
+          className="mb-6 flex items-center gap-2 text-white/60 hover:text-white transition-colors group"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="transition-transform group-hover:-translate-x-1"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+          <span className="text-sm font-bold tracking-wide uppercase">Back to Home</span>
+        </button>
         <div className="glass-panel p-10 md:p-12 rounded-[2.5rem] relative z-10 bg-white/[0.03] backdrop-blur-[50px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
           <div className="text-center mb-10">
             <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-purple-500 to-fuchsia-500 shadow-lg shadow-purple-500/30 flex items-center justify-center mb-6">

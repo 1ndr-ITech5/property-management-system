@@ -71,9 +71,8 @@ export default function GlassSidebar({ isOpen, onClose }: GlassSidebarProps) {
                 <div className="flex flex-col items-center justify-center mb-10 gap-3">
                     <div className="relative w-20 h-20 rounded-full border-2 border-white/20 overflow-hidden bg-white/5 p-1 shadow-xl">
                         <div className="w-full h-full rounded-full overflow-hidden bg-slate-800 flex items-center justify-center">
-                            {/* Using a placeholder for the avatar as the provided image path needs verification */}
                             <Image
-                                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Jessica"
+                                src="/sc1.png"
                                 alt="Admin Avatar"
                                 fill
                                 className="object-cover"

@@ -19,7 +19,7 @@ import {
 
 import { motion } from "framer-motion";
 import StatsCards from "@/components/StatsCards";
-import RevenueChart from "@/components/RevenueChart";
+import BookingsChart from "@/components/BookingsChart";
 
 // Modular Components
 import PropertyCard from "@/components/PropertyCard";
@@ -27,11 +27,14 @@ import AddPropertyModal from "@/components/AddPropertyModal";
 import EditPropertyModal from "@/components/EditPropertyModal";
 import Toast from "@/components/Toast";
 
+export type PropertyType = "Vila" | "Hotel" | "Apartment" | "Guesthouse";
+
 interface Property {
   id: string;
   name: string;
   price: number;
   status: "available" | "booked";
+  type: PropertyType;
   createdAt: any;
 }
 
@@ -63,7 +66,12 @@ export default function DashboardPage() {
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const props: Property[] = [];
       querySnapshot.forEach((docSnap) => {
-        props.push({ id: docSnap.id, ...docSnap.data() } as Property);
+        const data = docSnap.data();
+        props.push({ 
+          id: docSnap.id, 
+          ...data,
+          type: data.type || "Vila" // Backwards compatibility
+        } as Property);
       });
       setProperties(props);
       setFetching(false);
@@ -78,6 +86,26 @@ export default function DashboardPage() {
 
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
+  };
+
+  const runMigration = async () => {
+    if (!currentUser) return;
+    try {
+      setLoading(true);
+      const batch: any[] = [];
+      properties.forEach(p => {
+        if (!p.type) {
+          batch.push(updateDoc(doc(db, "properties", p.id), { type: "Vila" }));
+        }
+      });
+      await Promise.all(batch);
+      showToast("Migrimi përfundoi me sukses!", "success");
+    } catch (e) {
+      console.error("Migration error:", e);
+      showToast("Gabim gjatë migrimit.", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Transformation Logic
@@ -106,12 +134,57 @@ export default function DashboardPage() {
   }, [properties, statusFilter, sortKey, sortOrder]);
 
   // Aggregate Metrics for StatsCards
-  const occupancyRate = properties.length
-    ? Math.round((properties.filter(p => p.status === "booked").length / properties.length) * 100) + "%"
-    : "0%";
-  const monthlyRevenue = properties
-    .filter(p => p.status === "booked")
-    .reduce((acc, p) => acc + (p.price * 30), 0);
+  const stats = useMemo(() => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const currentMonthName = months[currentMonth];
+
+    const lastDate = new Date(currentYear, currentMonth - 1, 1);
+    const lastMonth = lastDate.getMonth();
+    const lastMonthYear = lastDate.getFullYear();
+    const lastMonthName = months[lastMonth];
+
+    // Static base data (matching BookingsChart)
+    const STATIC_BASE_BOOKED: { [key: string]: number } = {
+      "Jan": 45, "Feb": 52, "Mar": 48, "Apr": 61, "May": 55, "Jun": 67,
+      "Jul": 72, "Aug": 65, "Sep": 78, "Oct": 82, "Nov": 75, "Dec": 90
+    };
+
+    const STATIC_BASE_AVAILABLE: { [key: string]: number } = {
+      "Jan": 30, "Feb": 25, "Mar": 35, "Apr": 20, "May": 28, "Jun": 15,
+      "Jul": 12, "Aug": 22, "Sep": 10, "Oct": 8, "Nov": 18, "Dec": 5
+    };
+
+    const getStatsForMonth = (m: number, y: number, monthName: string) => {
+      const monthProps = properties.filter(p => {
+        if (!p.createdAt) return false;
+        const d = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
+        return d.getMonth() === m && d.getFullYear() === y;
+      });
+
+      return {
+        booked: (STATIC_BASE_BOOKED[monthName] || 0) + monthProps.filter(p => p.status === "booked").length,
+        available: (STATIC_BASE_AVAILABLE[monthName] || 0) + monthProps.filter(p => p.status === "available").length
+      };
+    };
+
+    const current = getStatsForMonth(currentMonth, currentYear, currentMonthName);
+    const previous = getStatsForMonth(lastMonth, lastMonthYear, lastMonthName);
+
+    const formatTrend = (curr: number, prev: number) => {
+      const diff = curr - prev;
+      return diff >= 0 ? `+${diff}` : `${diff}`;
+    };
+
+    return {
+      currentBooked: current.booked,
+      bookedTrend: formatTrend(current.booked, previous.booked),
+      currentAvailable: current.available,
+      availableTrend: formatTrend(current.available, previous.available)
+    };
+  }, [properties]);
 
   const handleLogout = async () => {
     try {
@@ -122,7 +195,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleAddProperty = async (name: string, price: number, status: "available" | "booked") => {
+  const handleAddProperty = async (name: string, price: number, status: "available" | "booked", type: PropertyType) => {
     if (!currentUser) return;
 
     // Validation
@@ -141,6 +214,7 @@ export default function DashboardPage() {
         name,
         price,
         status,
+        type,
         createdAt: serverTimestamp(),
         ownerId: currentUser.uid,
       });
@@ -171,7 +245,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleUpdateProperty = async (id: string, name: string, price: number, status: "available" | "booked") => {
+  const handleUpdateProperty = async (id: string, name: string, price: number, status: "available" | "booked", type: PropertyType) => {
     if (!currentUser) return;
 
     try {
@@ -181,6 +255,7 @@ export default function DashboardPage() {
         name,
         price,
         status,
+        type,
       });
 
       setEditingProperty(null);
@@ -201,22 +276,35 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-white tracking-tight">Manage Properties</h1>
           <p className="text-slate-400 mt-1">Real-time data synchronization for all units.</p>
         </div>
-        <button
-          onClick={() => setIsAdding(true)}
-          className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-indigo-500/20"
-        >
-          <span className="text-lg leading-none">+</span> Add Unit
-        </button>
+        <div className="flex items-center gap-3">
+          {properties.some(p => !p.type) && (
+            <button
+              onClick={runMigration}
+              disabled={loading}
+              className="px-4 py-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 font-semibold transition-all text-sm"
+            >
+              {loading ? "Duke migruar..." : "Migro Pronat"}
+            </button>
+          )}
+          <button
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-indigo-500/20"
+          >
+            <span className="text-lg leading-none">+</span> Add Unit
+          </button>
+        </div>
       </div>
 
       {/* Overview Analytics */}
       <StatsCards
         totalProperties={properties.length}
-        occupancyRate={occupancyRate}
-        monthlyRevenue={monthlyRevenue}
+        bookedCount={stats.currentBooked}
+        bookedTrend={stats.bookedTrend}
+        availableCount={stats.currentAvailable}
+        availableTrend={stats.availableTrend}
       />
 
-      <RevenueChart />
+      <BookingsChart />
 
       {/* Filters Toolbar */}
       <div className="glass-panel p-4 rounded-2xl mb-8 flex flex-wrap items-center gap-6">

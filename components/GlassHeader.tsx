@@ -39,19 +39,7 @@ export default function GlassHeader({ onMenuClick }: { onMenuClick: () => void }
                     </span>
                 </button>
 
-                <div className="flex items-center gap-4 pl-6 border-l border-white/10">
-                    <div className="text-right hidden sm:block">
-                        <p className="text-sm font-semibold text-white">Jessica Doe</p>
-                        <p className="text-xs text-slate-400">Admin</p>
-                    </div>
-                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-indigo-500/50 p-0.5">
-                        <img
-                            src="https://api.dicebear.com/7.x/avataaars/svg?seed=Jessica"
-                            alt="User Avatar"
-                            className="w-full h-full object-cover rounded-full bg-slate-800"
-                        />
-                    </div>
-                </div>
+
             </div>
         </motion.header>
     );

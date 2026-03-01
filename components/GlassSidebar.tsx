@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Home, BarChart2, Settings, LogOut, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,23 +48,50 @@ export default function GlassSidebar({ isOpen, onClose }: GlassSidebarProps) {
                 className={`fixed inset-y-0 left-0 z-50 md:sticky md:flex flex-col w-72 md:w-64 h-full p-6 glass-panel border-r border-white/10 rounded-r-3xl transition-all duration-300 ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
                     }`}
             >
-                <div className="flex items-center justify-between mb-10 pl-2">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 shadow-lg shadow-indigo-500/30 flex items-center justify-center">
-                            <span className="text-white font-bold text-xl">Z</span>
-                        </div>
-                        <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
-                            Zia Admin
-                        </span>
+                {/* Top Section: App Logo + Name */}
+                <div className="flex items-center gap-3 mb-8 pl-1">
+                    <div className="relative w-10 h-10">
+                        <Image
+                            src="/logo.svg"
+                            alt="LuxeEstate Logo"
+                            fill
+                            className="object-contain"
+                            priority
+                        />
                     </div>
-                    {/* Mobile Close Button */}
-                    <button
-                        onClick={onClose}
-                        className="md:hidden p-2 text-slate-400 hover:text-white glass-card rounded-xl"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+                    <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
+                        LuxeEstate
+                    </span>
                 </div>
+
+                {/* Divider */}
+                <div className="h-px bg-white/10 mb-8 w-full" />
+
+                {/* Admin Section: Avatar + Label */}
+                <div className="flex flex-col items-center justify-center mb-10 gap-3">
+                    <div className="relative w-20 h-20 rounded-full border-2 border-white/20 overflow-hidden bg-white/5 p-1 shadow-xl">
+                        <div className="w-full h-full rounded-full overflow-hidden bg-slate-800 flex items-center justify-center">
+                            {/* Using a placeholder for the avatar as the provided image path needs verification */}
+                            <Image
+                                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Jessica"
+                                alt="Admin Avatar"
+                                fill
+                                className="object-cover"
+                            />
+                        </div>
+                    </div>
+                    <span className="text-sm font-semibold tracking-wider text-slate-300 uppercase">
+                        Admin
+                    </span>
+                </div>
+
+                {/* Mobile Close Button */}
+                <button
+                    onClick={onClose}
+                    className="md:hidden p-2 text-slate-400 hover:text-white glass-card rounded-xl absolute top-6 right-6"
+                >
+                    <X className="w-5 h-5" />
+                </button>
 
                 <nav className="flex-1 flex flex-col gap-2">
                     {navItems.map((item) => {

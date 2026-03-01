@@ -20,10 +20,11 @@ interface Property {
     price: number;
     status: "available" | "booked";
     type: PropertyType;
+    description: string;
+    bedrooms: number;
+    bathrooms: number;
+    location: string;
     createdAt: any;
-    location?: string;
-    beds?: number;
-    baths?: number;
     image?: string;
 }
 
@@ -36,6 +37,10 @@ export default function PropertiesPage() {
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
     const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState<"all" | "available" | "booked">("all");
+    const [typeFilter, setTypeFilter] = useState<"all" | PropertyType>("all");
+    const [sortKey, setSortKey] = useState<"name" | "price">("name");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     const { currentUser } = useAuth();
 
@@ -53,10 +58,10 @@ export default function PropertiesPage() {
                     id: docSnap.id,
                     ...data,
                     type: data.type || "Vila",
-                    // Use mock values if they don't exist yet in the DB
-                    location: data.location || "City Center",
-                    beds: data.beds || 2,
-                    baths: data.baths || 1,
+                    description: data.description || "No description yet",
+                    bedrooms: data.bedrooms || 1,
+                    bathrooms: data.bathrooms || 1,
+                    location: data.location || "Unknown",
                 } as Property);
             });
             setProperties(props);
@@ -75,11 +80,53 @@ export default function PropertiesPage() {
     };
 
     const transformedProperties = useMemo(() => {
-        if (!search) return properties;
-        return properties.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.location?.toLowerCase().includes(search.toLowerCase()));
-    }, [properties, search]);
+        let result = [...properties];
 
-    const handleAddProperty = async (name: string, price: number, status: "available" | "booked", type: PropertyType) => {
+        // Search Filter
+        if (search) {
+            const term = search.toLowerCase();
+            result = result.filter(p => 
+                p.name.toLowerCase().includes(term) || 
+                p.location.toLowerCase().includes(term)
+            );
+        }
+
+        // Status Filter
+        if (statusFilter !== "all") {
+            result = result.filter(p => p.status === statusFilter);
+        }
+
+        // Type Filter
+        if (typeFilter !== "all") {
+            result = result.filter(p => p.type === typeFilter);
+        }
+
+        // Sort
+        result.sort((a, b) => {
+            let valA = a[sortKey as keyof Property];
+            let valB = b[sortKey as keyof Property];
+
+            if (typeof valA === "string") valA = valA.toLowerCase();
+            if (typeof valB === "string") valB = valB.toLowerCase();
+
+            if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+            if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+            return 0;
+        });
+
+        return result;
+    }, [properties, search, statusFilter, typeFilter, sortKey, sortOrder]);
+
+    const handleAddProperty = async (
+        name: string, 
+        price: number, 
+        status: "available" | "booked", 
+        type: PropertyType,
+        description: string,
+        bedrooms: number,
+        bathrooms: number,
+        location: string
+    ) => {
         if (!currentUser) return;
 
         if (!name.trim()) {
@@ -98,12 +145,12 @@ export default function PropertiesPage() {
                 price,
                 status,
                 type,
+                description: description.trim() || "No description yet",
+                bedrooms: bedrooms || 1,
+                bathrooms: bathrooms || 1,
+                location: location.trim() || "Unknown",
                 createdAt: serverTimestamp(),
                 ownerId: currentUser.uid,
-                // Assign some random mock data for the new UI fields for now
-                location: ["Downtown City Center", "Northern Wilderness", "West Coast Strip", "Quiet Bay", "Arts District", "Harbor View"][Math.floor(Math.random() * 6)],
-                beds: Math.floor(Math.random() * 4) + 1,
-                baths: Math.floor(Math.random() * 3) + 1,
             });
 
             setIsAdding(false);
@@ -132,7 +179,17 @@ export default function PropertiesPage() {
         }
     };
 
-    const handleUpdateProperty = async (id: string, name: string, price: number, status: "available" | "booked", type: PropertyType) => {
+    const handleUpdateProperty = async (
+        id: string, 
+        name: string, 
+        price: number, 
+        status: "available" | "booked", 
+        type: PropertyType,
+        description: string,
+        bedrooms: number,
+        bathrooms: number,
+        location: string
+    ) => {
         if (!currentUser) return;
 
         try {
@@ -143,6 +200,10 @@ export default function PropertiesPage() {
                 price,
                 status,
                 type,
+                description: description.trim() || "No description yet",
+                bedrooms: bedrooms || 1,
+                bathrooms: bathrooms || 1,
+                location: location.trim() || "Unknown",
             });
 
             setEditingProperty(null);
@@ -170,23 +231,70 @@ export default function PropertiesPage() {
                     <p className="text-slate-400 text-sm">Detailed management interface for your entire portfolio.</p>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="relative group">
+                <div className="flex flex-col xl:flex-row items-center gap-4 w-full xl:w-auto">
+                    {/* Search */}
+                    <div className="relative group w-full sm:w-64">
                         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-purple-400 transition-colors" />
                         <input
                             type="text"
-                            placeholder="Search properties..."
+                            placeholder="Search name or location..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="bg-white/5 border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 transition-all w-full md:w-64 shadow-[inset_0_2px_10px_rgba(0,0,0,0.2)]"
+                            className="bg-white/5 border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:border-purple-500/50 transition-all w-full shadow-[inset_0_2px_10px_rgba(0,0,0,0.2)]"
                         />
                     </div>
-                    <button
-                        onClick={() => setIsAdding(true)}
-                        className="h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 border border-purple-500/50 text-white font-medium flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(147,51,234,0.3)] hover:shadow-[0_0_25px_rgba(147,51,234,0.5)]"
-                    >
-                        <Plus className="w-4 h-4" /> Add New
-                    </button>
+
+                    <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                        {/* Type Filter */}
+                        <select
+                            value={typeFilter}
+                            onChange={(e) => setTypeFilter(e.target.value as any)}
+                            className="bg-white/5 border border-white/10 text-white px-4 py-2.5 rounded-2xl text-sm outline-none focus:border-purple-500/50 transition-all cursor-pointer"
+                        >
+                            <option value="all" className="bg-slate-900">All Types</option>
+                            <option value="Vila" className="bg-slate-900">Vilas</option>
+                            <option value="Hotel" className="bg-slate-900">Hotels</option>
+                            <option value="Apartment" className="bg-slate-900">Apartments</option>
+                            <option value="Guesthouse" className="bg-slate-900">Guesthouses</option>
+                        </select>
+
+                        {/* Status Filter */}
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value as any)}
+                            className="bg-white/5 border border-white/10 text-white px-4 py-2.5 rounded-2xl text-sm outline-none focus:border-purple-500/50 transition-all cursor-pointer"
+                        >
+                            <option value="all" className="bg-slate-900">All Status</option>
+                            <option value="available" className="bg-slate-900">Available</option>
+                            <option value="booked" className="bg-slate-900">Booked</option>
+                        </select>
+
+                        {/* Sort */}
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={sortKey}
+                                onChange={(e) => setSortKey(e.target.value as any)}
+                                className="bg-white/5 border border-white/10 text-white px-4 py-2.5 rounded-2xl text-sm outline-none focus:border-purple-500/50 transition-all cursor-pointer"
+                            >
+                                <option value="name" className="bg-slate-900">Sort: Name</option>
+                                <option value="price" className="bg-slate-900">Sort: Price</option>
+                            </select>
+                            <button
+                                onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                className="p-2.5 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+                                title={sortOrder === 'asc' ? "Ascending" : "Descending"}
+                            >
+                                {sortOrder === 'asc' ? '↑' : '↓'}
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={() => setIsAdding(true)}
+                            className="h-[42px] px-5 rounded-2xl bg-purple-600 hover:bg-purple-700 border border-purple-500/50 text-white font-bold text-sm flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(147,51,234,0.3)] active:scale-95"
+                        >
+                            <Plus className="w-4 h-4" /> Add Property
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -211,56 +319,68 @@ export default function PropertiesPage() {
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
                                 transition={{ delay: index * 0.05, duration: 0.4 }}
-                                className="glass-card rounded-[2rem] overflow-hidden flex flex-col"
+                                className="glass-card rounded-[2rem] overflow-hidden flex flex-col group h-full"
                             >
-                                <div className="h-40 bg-gradient-to-br from-white/10 to-white/0 relative flex items-center justify-center border-b border-white/10 group-hover:from-white/20 transition-all">
-                                    <span className="text-6xl filter drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]">{typeEmojis[property.type]}</span>
-                                    <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-xs font-bold text-white shadow-lg">
+                                <div className="h-40 bg-gradient-to-br from-white/10 to-white/0 relative flex items-center justify-center border-b border-white/10 group-hover:from-white/20 transition-all shrink-0">
+                                    {/* Status Badge - Top Left */}
+                                    <div className="absolute top-4 left-4 z-10">
+                                        <span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg border backdrop-blur-md ${
+                                            property.status === 'available' 
+                                                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                                                : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                                        }`}>
+                                            {property.status}
+                                        </span>
+                                    </div>
+
+                                    <span className="text-6xl filter drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)] transform transition-transform group-hover:scale-110 duration-300">
+                                        {typeEmojis[property.type]}
+                                    </span>
+
+                                    {/* Price Badge - Top Right */}
+                                    <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10 text-[10px] font-black text-white shadow-lg">
                                         ${property.price} / night
                                     </div>
                                 </div>
 
                                 <div className="p-6 flex flex-col flex-1">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h3 className="text-lg font-bold text-white leading-tight min-h-[3rem]">{property.name}</h3>
-                                        <div className="relative group/menu">
-                                            <button className="text-slate-400 hover:text-white transition-colors p-1">
-                                                <MoreHorizontal className="w-5 h-5" />
-                                            </button>
-                                            <div className="absolute right-0 top-full mt-2 w-32 glass-panel rounded-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all flex flex-col text-sm overflow-hidden z-20">
-                                                <button onClick={() => setEditingProperty(property)} className="px-4 py-2 text-left text-slate-300 hover:bg-white/10 hover:text-white transition-colors">Edit</button>
-                                                <button onClick={() => handleDeleteProperty(property.id)} className="px-4 py-2 text-left text-rose-400 hover:bg-rose-500/20 transition-colors">Delete</button>
-                                            </div>
-                                        </div>
+                                    <div className="mb-2">
+                                        <h3 className="text-lg font-bold text-white leading-tight line-clamp-1 group-hover:text-purple-400 transition-colors">{property.name}</h3>
                                     </div>
 
-                                    <div className="flex items-center gap-1.5 text-slate-400 text-sm mb-5">
-                                        <MapPin className="w-4 h-4 text-purple-400" />
+                                    <div className="flex items-center gap-1.5 text-slate-400 text-xs font-medium mb-3">
+                                        <MapPin className="w-3.5 h-3.5 text-purple-400" />
                                         {property.location}
                                     </div>
 
-                                    <div className="flex items-center gap-4 text-slate-300 text-sm font-medium mb-6">
-                                        <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 shadow-inner">
-                                            <BedDouble className="w-4 h-4 text-slate-400" /> {property.beds}
-                                        </div>
-                                        <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 shadow-inner">
-                                            <Bath className="w-4 h-4 text-slate-400" /> {property.baths}
-                                        </div>
-                                    </div>
+                                    <p className="text-[13px] text-slate-400 leading-relaxed line-clamp-2 mb-6 italic min-h-[2.5rem]">
+                                        "{property.description}"
+                                    </p>
 
-                                    <div className="flex items-center justify-between pt-4 border-t border-white/10 mt-auto">
-                                        <span className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg border ${property.status === 'available' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
-                                            property.status === 'booked' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' :
-                                                'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                                            }`}>
-                                            {property.status}
-                                        </span>
+                                    {/* Middle Section: View Details Button */}
+                                    <div className="mt-auto">
                                         <button
                                             onClick={() => setViewingProperty(property)}
-                                            className="text-sm font-bold text-purple-400 hover:text-purple-300 transition-colors bg-purple-500/10 hover:bg-purple-500/20 px-3 py-1.5 rounded-lg border border-purple-500/20 shadow-inner"
+                                            className="w-full py-3.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 font-bold text-xs uppercase tracking-widest border border-purple-500/20 transition-all active:scale-95 shadow-inner mb-5"
                                         >
                                             View Details
                                         </button>
+
+                                        {/* Actions Footer - Edit / Delete */}
+                                        <div className="grid grid-cols-2 gap-3 pt-5 border-t border-white/10">
+                                            <button
+                                                onClick={() => setEditingProperty(property)}
+                                                className="py-3 text-[11px] font-black rounded-xl bg-white/5 hover:bg-white/10 text-white border border-white/10 transition-all text-center uppercase tracking-widest active:scale-95 shadow-lg"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteProperty(property.id)}
+                                                className="py-3 text-[11px] font-black rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all text-center uppercase tracking-widest active:scale-95 shadow-lg"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </motion.div>

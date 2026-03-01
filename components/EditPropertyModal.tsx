@@ -11,6 +11,10 @@ interface Property {
     price: number;
     status: "available" | "booked";
     type: PropertyType;
+    description: string;
+    bedrooms: number;
+    bathrooms: number;
+    location: string;
     createdAt: any;
 }
 
@@ -18,7 +22,17 @@ interface EditPropertyModalProps {
     isOpen: boolean;
     onClose: () => void;
     property: Property | null;
-    onUpdate: (id: string, name: string, price: number, status: "available" | "booked", type: PropertyType) => Promise<void>;
+    onUpdate: (
+        id: string, 
+        name: string, 
+        price: number, 
+        status: "available" | "booked", 
+        type: PropertyType,
+        description: string,
+        bedrooms: number,
+        bathrooms: number,
+        location: string
+    ) => Promise<void>;
     loading: boolean;
 }
 
@@ -27,6 +41,10 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
     const [price, setPrice] = useState<number>(0);
     const [status, setStatus] = useState<"available" | "booked">("available");
     const [type, setType] = useState<PropertyType>("Vila");
+    const [description, setDescription] = useState("");
+    const [bedrooms, setBedrooms] = useState<number>(1);
+    const [bathrooms, setBathrooms] = useState<number>(1);
+    const [location, setLocation] = useState("");
 
     useEffect(() => {
         if (property) {
@@ -34,6 +52,10 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
             setPrice(property.price);
             setStatus(property.status);
             setType(property.type || "Vila");
+            setDescription(property.description || "");
+            setBedrooms(property.bedrooms || 1);
+            setBathrooms(property.bathrooms || 1);
+            setLocation(property.location || "");
         }
     }, [property]);
 
@@ -41,7 +63,17 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onUpdate(property.id, name, price, status, type);
+        await onUpdate(
+            property.id, 
+            name, 
+            price, 
+            status, 
+            type, 
+            description || "No description yet", 
+            bedrooms || 1, 
+            bathrooms || 1, 
+            location || "Unknown"
+        );
     };
 
     return (
@@ -58,45 +90,92 @@ export default function EditPropertyModal({ isOpen, onClose, property, onUpdate,
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.95, opacity: 0, y: 20 }}
                         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                        className="w-full max-w-md glass-panel overflow-hidden rounded-3xl"
+                        className="w-full max-w-2xl glass-panel overflow-hidden rounded-3xl"
                     >
                         <div className="border-b border-white/10 p-8">
                             <h2 className="text-2xl font-bold text-white tracking-tight">Edit Property</h2>
                             <p className="mt-1 text-sm text-slate-400">Updates are reflected in real-time.</p>
                         </div>
-                        <form onSubmit={handleSubmit} className="p-8 space-y-5">
+                        <form onSubmit={handleSubmit} className="p-8 space-y-5 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Property Name</label>
+                                    <input
+                                        required
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all placeholder-slate-500 shadow-inner"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Property Type</label>
+                                    <select
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner appearance-none"
+                                        value={type}
+                                        onChange={(e) => setType(e.target.value as PropertyType)}
+                                    >
+                                        <option value="Vila" className="bg-slate-900">🏡 Vila</option>
+                                        <option value="Hotel" className="bg-slate-900">🏨 Hotel</option>
+                                        <option value="Apartment" className="bg-slate-900">🏢 Apartment</option>
+                                        <option value="Guesthouse" className="bg-slate-900">🛏️ Guesthouse</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div>
-                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Property Name</label>
+                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Location</label>
                                 <input
-                                    required
+                                    placeholder="e.g. Tirana, Albania"
                                     className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all placeholder-slate-500 shadow-inner"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
+                                    value={location}
+                                    onChange={(e) => setLocation(e.target.value)}
                                 />
                             </div>
+
                             <div>
-                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Property Type</label>
-                                <select
-                                    className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner appearance-none"
-                                    value={type}
-                                    onChange={(e) => setType(e.target.value as PropertyType)}
-                                >
-                                    <option value="Vila" className="bg-slate-900">🏡 Vila</option>
-                                    <option value="Hotel" className="bg-slate-900">🏨 Hotel</option>
-                                    <option value="Apartment" className="bg-slate-900">🏢 Apartment</option>
-                                    <option value="Guesthouse" className="bg-slate-900">🛏️ Guesthouse</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Price per Night ($)</label>
-                                <input
-                                    type="number"
-                                    required
-                                    className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all placeholder-slate-500 shadow-inner"
-                                    value={price}
-                                    onChange={(e) => setPrice(Number(e.target.value))}
+                                <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Description</label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="A brief description..."
+                                    className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all placeholder-slate-500 shadow-inner resize-none"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
                                 />
                             </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Price / Night ($)</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all placeholder-slate-500 shadow-inner"
+                                        value={price}
+                                        onChange={(e) => setPrice(Number(e.target.value))}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Bedrooms</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner"
+                                        value={bedrooms}
+                                        onChange={(e) => setBedrooms(Number(e.target.value))}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Bathrooms</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        className="block w-full rounded-2xl bg-white/5 border border-white/10 px-5 py-3.5 text-white font-medium focus:bg-white/10 focus:border-indigo-500/50 outline-none transition-all shadow-inner"
+                                        value={bathrooms}
+                                        onChange={(e) => setBathrooms(Number(e.target.value))}
+                                    />
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="block text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 ml-1">Current Status</label>
                                 <select

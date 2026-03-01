@@ -11,20 +11,18 @@ import {
   query,
   orderBy,
   serverTimestamp,
-  deleteDoc,
-  doc,
   updateDoc,
+  doc,
   onSnapshot
 } from "firebase/firestore";
 
 import { motion } from "framer-motion";
+import { Plus, LayoutDashboard, BarChart3, FileText } from "lucide-react";
 import StatsCards from "@/components/StatsCards";
 import BookingsChart from "@/components/BookingsChart";
 
 // Modular Components
-import PropertyCard from "@/components/PropertyCard";
 import AddPropertyModal from "@/components/AddPropertyModal";
-import EditPropertyModal from "@/components/EditPropertyModal";
 import Toast from "@/components/Toast";
 
 export type PropertyType = "Vila" | "Hotel" | "Apartment" | "Guesthouse";
@@ -35,6 +33,10 @@ interface Property {
   price: number;
   status: "available" | "booked";
   type: PropertyType;
+  description: string;
+  bedrooms: number;
+  bathrooms: number;
+  location: string;
   createdAt: any;
 }
 
@@ -42,13 +44,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-
-  // Filter and Sort States
-  const [statusFilter, setStatusFilter] = useState<"all" | "available" | "booked">("all");
-  const [sortKey, setSortKey] = useState<"name" | "price">("name");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -62,7 +58,6 @@ export default function DashboardPage() {
     setFetching(true);
     const q = query(collection(db, "properties"), orderBy("createdAt", "desc"));
 
-    // Real-time updates
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const props: Property[] = [];
       querySnapshot.forEach((docSnap) => {
@@ -70,7 +65,11 @@ export default function DashboardPage() {
         props.push({ 
           id: docSnap.id, 
           ...data,
-          type: data.type || "Vila" // Backwards compatibility
+          type: data.type || "Vila",
+          description: data.description || "No description yet",
+          bedrooms: data.bedrooms || 1,
+          bathrooms: data.bathrooms || 1,
+          location: data.location || "Unknown"
         } as Property);
       });
       setProperties(props);
@@ -94,8 +93,15 @@ export default function DashboardPage() {
       setLoading(true);
       const batch: any[] = [];
       properties.forEach(p => {
-        if (!p.type) {
-          batch.push(updateDoc(doc(db, "properties", p.id), { type: "Vila" }));
+        const updates: any = {};
+        if (!p.type) updates.type = "Vila";
+        if (p.description === undefined) updates.description = "No description yet";
+        if (p.bedrooms === undefined) updates.bedrooms = 1;
+        if (p.bathrooms === undefined) updates.bathrooms = 1;
+        if (p.location === undefined || p.location === "City Center") updates.location = "Unknown";
+
+        if (Object.keys(updates).length > 0) {
+          batch.push(updateDoc(doc(db, "properties", p.id), updates));
         }
       });
       await Promise.all(batch);
@@ -108,32 +114,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Transformation Logic
-  const transformedProperties = useMemo(() => {
-    let result = [...properties];
-
-    // Filter
-    if (statusFilter !== "all") {
-      result = result.filter(p => p.status === statusFilter);
-    }
-
-    // Sort
-    result.sort((a, b) => {
-      let valA = a[sortKey as keyof Property];
-      let valB = b[sortKey as keyof Property];
-
-      if (typeof valA === "string") valA = valA.toLowerCase();
-      if (typeof valB === "string") valB = valB.toLowerCase();
-
-      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
-      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return result;
-  }, [properties, statusFilter, sortKey, sortOrder]);
-
-  // Aggregate Metrics for StatsCards
   const stats = useMemo(() => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const now = new Date();
@@ -146,7 +126,6 @@ export default function DashboardPage() {
     const lastMonthYear = lastDate.getFullYear();
     const lastMonthName = months[lastMonth];
 
-    // Static base data (matching BookingsChart)
     const STATIC_BASE_BOOKED: { [key: string]: number } = {
       "Jan": 45, "Feb": 52, "Mar": 48, "Apr": 61, "May": 55, "Jun": 67,
       "Jul": 72, "Aug": 65, "Sep": 78, "Oct": 82, "Nov": 75, "Dec": 90
@@ -186,28 +165,23 @@ export default function DashboardPage() {
     };
   }, [properties]);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.push("/");
-    } catch (error) {
-      console.error("Failed to log out", error);
-    }
-  };
-
-  const handleAddProperty = async (name: string, price: number, status: "available" | "booked", type: PropertyType) => {
+  const handleAddProperty = async (
+    name: string, 
+    price: number, 
+    status: "available" | "booked", 
+    type: PropertyType,
+    description: string,
+    bedrooms: number,
+    bathrooms: number,
+    location: string
+  ) => {
     if (!currentUser) return;
 
-    // Validation
     if (!name.trim()) {
       showToast("Ju lutem plotësoni emrin e pronës.", "error");
       return;
     }
-    if (price <= 0) {
-      showToast("Çmimi duhet të jetë një numër pozitiv.", "error");
-      return;
-    }
-
+    
     try {
       setLoading(true);
       await addDoc(collection(db, "properties"), {
@@ -215,6 +189,10 @@ export default function DashboardPage() {
         price,
         status,
         type,
+        description: description.trim() || "No description yet",
+        bedrooms: bedrooms || 1,
+        bathrooms: bathrooms || 1,
+        location: location.trim() || "Unknown",
         createdAt: serverTimestamp(),
         ownerId: currentUser.uid,
       });
@@ -229,55 +207,15 @@ export default function DashboardPage() {
     }
   };
 
-  const handleDeleteProperty = async (propertyId: string) => {
-    if (!currentUser) return;
-    if (!window.confirm("A jeni të sigurt që dëshironi të fshini këtë pronë?")) return;
-
-    try {
-      setLoading(true);
-      await deleteDoc(doc(db, "properties", propertyId));
-      showToast("Prona u fshi me sukses.", "success");
-    } catch (e) {
-      console.error("Error deleting document: ", e);
-      showToast("Gabim gjatë fshirjes.", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateProperty = async (id: string, name: string, price: number, status: "available" | "booked", type: PropertyType) => {
-    if (!currentUser) return;
-
-    try {
-      setLoading(true);
-      const propertyRef = doc(db, "properties", id);
-      await updateDoc(propertyRef, {
-        name,
-        price,
-        status,
-        type,
-      });
-
-      setEditingProperty(null);
-      showToast("Prona u përditësua me sukses.", "success");
-    } catch (e) {
-      console.error("Error updating document: ", e);
-      showToast("Gabim gjatë përditësimit.", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <>
-      {/* Top Banner & Actions */}
+    <ProtectedRoute>
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Manage Properties</h1>
-          <p className="text-slate-400 mt-1">Real-time data synchronization for all units.</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">System Dashboard</h1>
+          <p className="text-slate-400 mt-1">Real-time property management overview.</p>
         </div>
         <div className="flex items-center gap-3">
-          {properties.some(p => !p.type) && (
+          {(properties.some(p => !p.type || !p.description || !p.bedrooms || !p.bathrooms || !p.location || p.location === "City Center")) && (
             <button
               onClick={runMigration}
               disabled={loading}
@@ -286,110 +224,82 @@ export default function DashboardPage() {
               {loading ? "Duke migruar..." : "Migro Pronat"}
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Main Chart */}
+      <BookingsChart />
+
+      {/* Quick Stats Grid */}
+      <div className="mb-10">
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-[0.2em] mb-6 ml-1">Performance Overview</h2>
+        <StatsCards
+          totalProperties={properties.length}
+          bookedCount={stats.currentBooked}
+          bookedTrend={stats.bookedTrend}
+          availableCount={stats.currentAvailable}
+          availableTrend={stats.availableTrend}
+        />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mb-12">
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-[0.2em] mb-6 ml-1">Quick Actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <button
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-indigo-500/20"
+            className="flex items-center gap-4 p-5 rounded-[2rem] bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-indigo-500/30 transition-all group text-left shadow-xl"
           >
-            <span className="text-lg leading-none">+</span> Add Unit
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+              <Plus className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-white font-bold">Add Property</p>
+              <p className="text-xs text-slate-500">Create a new unit</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push("/dashboard/properties")}
+            className="flex items-center gap-4 p-5 rounded-[2rem] bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-purple-500/30 transition-all group text-left shadow-xl"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+              <LayoutDashboard className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-white font-bold">View Directory</p>
+              <p className="text-xs text-slate-500">Manage all units</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push("/dashboard/analytics")}
+            className="flex items-center gap-4 p-5 rounded-[2rem] bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-emerald-500/30 transition-all group text-left shadow-xl"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+              <BarChart3 className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-white font-bold">Analytics</p>
+              <p className="text-xs text-slate-500">Deep performance data</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => showToast("Gjenerimi i raportit do të jetë i disponueshëm së shpejti.", "success")}
+            className="flex items-center gap-4 p-5 rounded-[2rem] bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-amber-500/30 transition-all group text-left shadow-xl"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+              <FileText className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-white font-bold">Reports</p>
+              <p className="text-xs text-slate-500">Download data summaries</p>
+            </div>
           </button>
         </div>
       </div>
 
-      {/* Overview Analytics */}
-      <StatsCards
-        totalProperties={properties.length}
-        bookedCount={stats.currentBooked}
-        bookedTrend={stats.bookedTrend}
-        availableCount={stats.currentAvailable}
-        availableTrend={stats.availableTrend}
-      />
-
-      <BookingsChart />
-
-      {/* Filters Toolbar */}
-      <div className="glass-panel p-4 rounded-2xl mb-8 flex flex-wrap items-center gap-6">
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Filter:</span>
-          <div className="flex bg-white/5 p-1 rounded-xl">
-            {(["all", "available", "booked"] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${statusFilter === status
-                    ? 'bg-white/10 text-white shadow-inner border border-white/5'
-                    : 'text-slate-400 hover:text-white'
-                  }`}
-              >
-                {status === 'all' ? 'All' : status === 'available' ? 'Available' : 'Booked'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 md:ml-auto">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sort:</span>
-          <div className="flex items-center gap-2">
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as any)}
-              className="bg-white/5 border border-white/10 text-white px-4 py-2 rounded-xl text-sm outline-none"
-            >
-              <option value="name" className="text-slate-900">Name</option>
-              <option value="price" className="text-slate-900">Price</option>
-            </select>
-            <button
-              onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-              className="p-2 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
-            >
-              {sortOrder === 'asc' ? '↑' : '↓'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Properties Grid */}
-      {fetching ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="w-12 h-12 border-4 border-white/10 border-t-indigo-500 rounded-full animate-spin mb-4" />
-          <p className="text-slate-400 font-medium animate-pulse">Syncing data...</p>
-        </div>
-      ) : transformedProperties.length === 0 ? (
-        <div className="glass-panel p-16 rounded-3xl text-center border-dashed">
-          <h3 className="text-2xl font-bold text-white mb-2">No units found</h3>
-          <p className="text-slate-400">Try adjusting your filters or add a new property.</p>
-        </div>
-      ) : (
-        <motion.div
-          className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-          initial="hidden"
-          animate="show"
-          variants={{
-            hidden: { opacity: 0 },
-            show: {
-              opacity: 1,
-              transition: { staggerChildren: 0.1 }
-            }
-          }}
-        >
-          {transformedProperties.map((property) => (
-            <motion.div
-              key={property.id}
-              variants={{
-                hidden: { opacity: 0, y: 20 },
-                show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
-              }}
-            >
-              <PropertyCard
-                property={property}
-                onEdit={setEditingProperty}
-                onDelete={handleDeleteProperty}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
-      )}
-
-      {/* Modals */}
       <AddPropertyModal
         isOpen={isAdding}
         onClose={() => setIsAdding(false)}
@@ -397,15 +307,6 @@ export default function DashboardPage() {
         loading={loading}
       />
 
-      <EditPropertyModal
-        isOpen={!!editingProperty}
-        onClose={() => setEditingProperty(null)}
-        property={editingProperty}
-        onUpdate={handleUpdateProperty}
-        loading={loading}
-      />
-
-      {/* Toast Notifications */}
       {toast && (
         <Toast
           message={toast.message}
@@ -413,6 +314,6 @@ export default function DashboardPage() {
           onClose={() => setToast(null)}
         />
       )}
-    </>
+    </ProtectedRoute>
   );
 }

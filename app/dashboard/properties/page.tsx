@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, where } from "firebase/firestore";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, MapPin, BedDouble, Bath, Plus, Filter, MoreHorizontal } from "lucide-react";
 
@@ -48,7 +48,11 @@ export default function PropertiesPage() {
         if (!currentUser) return;
 
         setFetching(true);
-        const q = query(collection(db, "properties"), orderBy("createdAt", "desc"));
+        const q = query(
+            collection(db, "properties"), 
+            where("ownerId", "==", currentUser.uid),
+            orderBy("createdAt", "desc")
+        );
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
             const props: Property[] = [];
@@ -127,20 +131,16 @@ export default function PropertiesPage() {
         bathrooms: number,
         location: string
     ) => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            console.error("DEBUG: No currentUser found in handleAddProperty (Properties Page)");
+            return;
+        }
 
-        if (!name.trim()) {
-            showToast("Please enter a property name.", "error");
-            return;
-        }
-        if (price <= 0) {
-            showToast("Price must be a positive number.", "error");
-            return;
-        }
+        console.log("DEBUG: handleAddProperty started for user:", currentUser.uid);
 
         try {
             setLoading(true);
-            await addDoc(collection(db, "properties"), {
+            const docRef = await addDoc(collection(db, "properties"), {
                 name,
                 price,
                 status,
@@ -153,10 +153,11 @@ export default function PropertiesPage() {
                 ownerId: currentUser.uid,
             });
 
+            console.log("DEBUG: Firestore addDoc successful. Doc ID:", docRef.id);
             setIsAdding(false);
             showToast("Property added successfully!", "success");
         } catch (e) {
-            console.error("Error adding document: ", e);
+            console.error("DEBUG: Firestore error in handleAddProperty:", e);
             showToast("Error adding property.", "error");
         } finally {
             setLoading(false);

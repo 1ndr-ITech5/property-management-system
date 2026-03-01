@@ -10,6 +10,7 @@ import {
   addDoc,
   query,
   orderBy,
+  where,
   serverTimestamp,
   updateDoc,
   doc,
@@ -56,7 +57,11 @@ export default function DashboardPage() {
     if (!currentUser) return;
 
     setFetching(true);
-    const q = query(collection(db, "properties"), orderBy("createdAt", "desc"));
+    const q = query(
+      collection(db, "properties"), 
+      where("ownerId", "==", currentUser.uid),
+      orderBy("createdAt", "desc")
+    );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const props: Property[] = [];
@@ -126,16 +131,6 @@ export default function DashboardPage() {
     const lastMonthYear = lastDate.getFullYear();
     const lastMonthName = months[lastMonth];
 
-    const STATIC_BASE_BOOKED: { [key: string]: number } = {
-      "Jan": 45, "Feb": 52, "Mar": 48, "Apr": 61, "May": 55, "Jun": 67,
-      "Jul": 72, "Aug": 65, "Sep": 78, "Oct": 82, "Nov": 75, "Dec": 90
-    };
-
-    const STATIC_BASE_AVAILABLE: { [key: string]: number } = {
-      "Jan": 30, "Feb": 25, "Mar": 35, "Apr": 20, "May": 28, "Jun": 15,
-      "Jul": 12, "Aug": 22, "Sep": 10, "Oct": 8, "Nov": 18, "Dec": 5
-    };
-
     const getStatsForMonth = (m: number, y: number, monthName: string) => {
       const monthProps = properties.filter(p => {
         if (!p.createdAt) return false;
@@ -144,8 +139,8 @@ export default function DashboardPage() {
       });
 
       return {
-        booked: (STATIC_BASE_BOOKED[monthName] || 0) + monthProps.filter(p => p.status === "booked").length,
-        available: (STATIC_BASE_AVAILABLE[monthName] || 0) + monthProps.filter(p => p.status === "available").length
+        booked: monthProps.filter(p => p.status === "booked").length,
+        available: monthProps.filter(p => p.status === "available").length
       };
     };
 
@@ -175,16 +170,16 @@ export default function DashboardPage() {
     bathrooms: number,
     location: string
   ) => {
-    if (!currentUser) return;
-
-    if (!name.trim()) {
-      showToast("Ju lutem plotësoni emrin e pronës.", "error");
+    if (!currentUser) {
+      console.error("DEBUG: No currentUser found in handleAddProperty");
       return;
     }
-    
+
+    console.log("DEBUG: handleAddProperty started for user:", currentUser.uid);
+
     try {
       setLoading(true);
-      await addDoc(collection(db, "properties"), {
+      const docRef = await addDoc(collection(db, "properties"), {
         name,
         price,
         status,
@@ -197,10 +192,11 @@ export default function DashboardPage() {
         ownerId: currentUser.uid,
       });
 
+      console.log("DEBUG: Firestore addDoc successful. Doc ID:", docRef.id);
       setIsAdding(false);
       showToast("Prona u shtua me sukses!", "success");
     } catch (e) {
-      console.error("Error adding document: ", e);
+      console.error("DEBUG: Firestore error in handleAddProperty:", e);
       showToast("Gabim gjatë shtimit të pronës.", "error");
     } finally {
       setLoading(false);

@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from "framer-motion";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
+import { useAuth } from "@/context/AuthContext";
 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -26,23 +27,19 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-// Static random data for both categories to ensure the chart is never empty
-const STATIC_BASE_BOOKED: { [key: string]: number } = {
-    "Jan": 45, "Feb": 52, "Mar": 48, "Apr": 61, "May": 55, "Jun": 67,
-    "Jul": 72, "Aug": 65, "Sep": 78, "Oct": 82, "Nov": 75, "Dec": 90
-};
-
-const STATIC_BASE_AVAILABLE: { [key: string]: number } = {
-    "Jan": 30, "Feb": 25, "Mar": 35, "Apr": 20, "May": 28, "Jun": 15,
-    "Jul": 12, "Aug": 22, "Sep": 10, "Oct": 8, "Nov": 18, "Dec": 5
-};
-
 export default function BookingsChart() {
+    const { currentUser } = useAuth();
     const [properties, setProperties] = useState<any[]>([]);
     const [timeRange, setTimeRange] = useState("6m");
 
     useEffect(() => {
-        const q = query(collection(db, "properties"), orderBy("createdAt", "desc"));
+        if (!currentUser) return;
+
+        const q = query(
+            collection(db, "properties"), 
+            where("ownerId", "==", currentUser.uid),
+            orderBy("createdAt", "desc")
+        );
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const props = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -51,21 +48,21 @@ export default function BookingsChart() {
             setProperties(props);
         });
         return () => unsubscribe();
-    }, []);
+    }, [currentUser]);
 
     const chartData = useMemo(() => {
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const now = new Date();
         const dataMap: { [key: string]: { booked: number, available: number } } = {};
 
-        // Initialize with static random base data for the selected range
+        // Initialize with zero data for the selected range
         const count = timeRange === "6m" ? 6 : 12;
         for (let i = count - 1; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const monthName = months[d.getMonth()];
             dataMap[monthName] = {
-                booked: STATIC_BASE_BOOKED[monthName] || 0,
-                available: STATIC_BASE_AVAILABLE[monthName] || 0
+                booked: 0,
+                available: 0
             };
         }
 

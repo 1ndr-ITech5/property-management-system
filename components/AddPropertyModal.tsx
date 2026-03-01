@@ -33,26 +33,40 @@ export default function AddPropertyModal({ isOpen, onClose, onAdd, loading }: Ad
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onAdd(
-            name, 
-            price, 
-            status, 
-            type, 
-            description || "No description yet", 
-            bedrooms || 1, 
-            bathrooms || 1, 
-            location || "Unknown"
-        );
-        // Reset form on success (caller handles closing)
-        if (!loading) {
-            setName("");
-            setPrice(0);
-            setStatus("available");
-            setType("Vila");
-            setDescription("");
-            setBedrooms(1);
-            setBathrooms(1);
-            setLocation("");
+        
+        console.log("DEBUG: AddPropertyModal submission started");
+        console.log("Data:", { name, price, status, type, description, bedrooms, bathrooms, location });
+
+        if (!name || !price) {
+            console.error("DEBUG: Name or Price is missing");
+            return;
+        }
+
+        try {
+            await onAdd(
+                name, 
+                price, 
+                status, 
+                type, 
+                description || "No description yet", 
+                bedrooms || 1, 
+                bathrooms || 1, 
+                location || "Unknown"
+            );
+            console.log("DEBUG: onAdd callback executed successfully");
+            
+            if (!loading) {
+                setName("");
+                setPrice(0);
+                setStatus("available");
+                setType("Vila");
+                setDescription("");
+                setBedrooms(1);
+                setBathrooms(1);
+                setLocation("");
+            }
+        } catch (err) {
+            console.error("DEBUG: Error in onAdd callback:", err);
         }
     };
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 
 import { BackgroundGradientAnimation } from "@/components/ui/background-gradient-animation";
@@ -82,8 +83,14 @@ export default function LoginPage() {
         </button>
         <div className="glass-panel p-10 md:p-12 rounded-[2.5rem] relative z-10 bg-white/[0.03] backdrop-blur-[50px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
           <div className="text-center mb-10">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-purple-500 to-fuchsia-500 shadow-lg shadow-purple-500/30 flex items-center justify-center mb-6">
-              <span className="text-white font-bold text-3xl">P</span>
+            <div className="relative w-[100px] h-[100px] mx-auto mb-8">
+              <Image
+                src="/spiro.svg"
+                alt="PMS Logo"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-white mb-2">
               Welcome Back

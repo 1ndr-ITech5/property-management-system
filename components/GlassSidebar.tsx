@@ -42,11 +42,9 @@ export default function GlassSidebar({ isOpen, onClose }: GlassSidebarProps) {
                 initial={false}
                 animate={{
                     x: typeof window !== 'undefined' && window.innerWidth < 768 ? (isOpen ? 0 : -300) : 0,
-                    opacity: 1
                 }}
                 transition={{ duration: 0.4, ease: "circOut" }}
-                className={`fixed inset-y-0 left-0 z-50 md:sticky md:flex flex-col w-72 md:w-64 h-full p-6 glass-panel border-r border-white/10 rounded-r-3xl transition-all duration-300 ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-                    }`}
+                className="fixed inset-y-0 left-0 z-50 md:sticky md:flex flex-col w-72 md:w-64 h-full p-6 glass-panel border-r border-white/10 rounded-r-3xl"
             >
                 {/* Top Section: App Logo + Name */}
                 <div className="flex items-center gap-3 mb-8 pl-1">
@@ -87,7 +85,7 @@ export default function GlassSidebar({ isOpen, onClose }: GlassSidebarProps) {
                 {/* Mobile Close Button */}
                 <button
                     onClick={onClose}
-                    className="md:hidden p-2 text-slate-400 hover:text-white glass-card rounded-xl absolute top-6 right-6"
+                    className="md:hidden p-2 text-slate-400 hover:text-white glass-card rounded-xl absolute top-6 right-6 z-50 cursor-pointer pointer-events-auto"
                 >
                     <X className="w-5 h-5" />
                 </button>

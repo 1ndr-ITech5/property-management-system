@@ -19,8 +19,10 @@ interface Property {
     id: string;
     name: string;
     price: number;
-    status: "available" | "booked";
+    status: "available" | "booked" | "unavailable";
     type: PropertyType;
+    maxCapacity: number;
+    currentBookings: number;
     createdAt: any;
 }
 
@@ -66,10 +68,15 @@ export default function AnalyticsPage() {
             orderBy("createdAt", "desc")
         );
         const unsubProps = onSnapshot(qProps, (snapshot) => {
-            const props = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Property));
+            const props = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    maxCapacity: data.maxCapacity || 1,
+                    currentBookings: data.currentBookings || 0
+                } as Property;
+            });
             setProperties(props);
         });
 
@@ -89,7 +96,7 @@ export default function AnalyticsPage() {
         return () => { unsubProps(); unsubRes(); };
     }, [currentUser]);
 
-    // --- DATA ENGINE: Real Reservations ---
+    // --- DATA ENGINE: REAL DATA ONLY ---
     const chartData = useMemo(() => {
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
         const now = new Date();
@@ -108,14 +115,17 @@ export default function AnalyticsPage() {
             return weeks.map((w, i) => {
                 const progress = (i + 1) / 4;
                 const bookedCount = currentMonthRes.length;
+                
+                const revenue = currentMonthRes.reduce((acc, r) => {
+                    const p = properties.find(prop => prop.id === r.propertyId);
+                    return acc + (p?.price || 0);
+                }, 0);
+
                 return {
                     name: w,
-                    booked: Math.round(bookedCount * progress * 10), // Scale for visual
-                    available: Math.round(properties.length * 30 * progress),
-                    revenue: currentMonthRes.reduce((acc, r) => {
-                        const p = properties.find(prop => prop.id === r.propertyId);
-                        return acc + (p?.price || 0);
-                    }, 0) * progress,
+                    booked: Math.round(bookedCount * progress),
+                    available: Math.round(properties.reduce((acc, p) => acc + p.maxCapacity, 0) * progress),
+                    revenue: revenue * progress,
                     occupancy: properties.length > 0 ? Math.round((bookedCount / properties.length) * 100 * progress) : 0,
                 };
             });
@@ -126,24 +136,34 @@ export default function AnalyticsPage() {
             const d = new Date(curY, curM - i, 1);
             const mIdx = d.getMonth();
             const year = d.getFullYear();
+            const isCurrent = mIdx === curM && year === curY;
             const monthName = months[mIdx];
 
-            const monthReservations = reservations.filter(r => {
-                const rd = new Date(r.checkIn);
-                return rd.getMonth() === mIdx && rd.getFullYear() === year;
-            });
+            let booked = 0, available = 0, revenue = 0, occupancy = 0;
 
-            const booked = monthReservations.length;
-            const revenue = monthReservations.reduce((acc, r) => {
-                const p = properties.find(prop => prop.id === r.propertyId);
-                return acc + (p?.price || 0);
-            }, 0);
-            const occupancy = properties.length > 0 ? Math.round((booked / properties.length) * 100) : 0;
+            if (isCurrent) {
+                const monthRes = reservations.filter(r => {
+                    const rd = new Date(r.checkIn);
+                    return rd.getMonth() === mIdx && rd.getFullYear() === year;
+                });
+                booked = monthRes.length;
+                available = properties.reduce((acc, p) => acc + p.maxCapacity, 0);
+                revenue = monthRes.reduce((acc, r) => {
+                    const p = properties.find(prop => prop.id === r.propertyId);
+                    return acc + (p?.price || 0);
+                }, 0);
+                occupancy = properties.length > 0 ? Math.round((booked / properties.length) * 100) : 0;
+            } else {
+                booked = 0;
+                available = 0;
+                revenue = 0;
+                occupancy = 0;
+            }
 
             result.push({
                 name: monthName,
-                booked: booked * 15, // Scale for visual consistency
-                available: properties.length * 30 - (booked * 15),
+                booked,
+                available,
                 revenue,
                 occupancy
             });
@@ -151,7 +171,7 @@ export default function AnalyticsPage() {
         return result;
     }, [properties, reservations, timeRange]);
 
-    // --- KPI Aggregation ---
+    // --- KPI Aggregation: Based on Real Data ---
     const kpis = useMemo(() => {
         const total = properties.length;
         const booked = reservations.length;
@@ -159,23 +179,57 @@ export default function AnalyticsPage() {
             const p = properties.find(prop => prop.id === r.propertyId);
             return acc + (p?.price || 0);
         }, 0);
-        const avgOccupancy = total > 0 ? Math.round((booked / (total * 12)) * 100) : 0;
+        
+        const avgOcc = properties.length > 0 
+            ? Math.round(properties.reduce((acc, p) => acc + (p.currentBookings / p.maxCapacity), 0) / properties.length * 100)
+            : 0;
 
         return [
             { title: "Total Properties", value: total, icon: Building2, color: "text-blue-400", bg: "bg-blue-500/10" },
             { title: "Total Bookings", value: booked, icon: BookmarkCheck, color: "text-purple-400", bg: "bg-purple-500/10" },
-            { title: "Historical Occupancy", value: `${avgOccupancy}%`, icon: Percent, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+            { title: "Current Occupancy", value: `${avgOcc}%`, icon: Percent, color: "text-emerald-400", bg: "bg-emerald-500/10" },
             { title: "Total Revenue", value: `$${Math.round(revenue).toLocaleString()}`, icon: DollarSign, color: "text-amber-400", bg: "bg-amber-500/10" }
         ];
     }, [properties, reservations]);
 
-    // --- Unit Type Distribution Logic ---
+    // --- Booked Unit Mix: Logic based on ACTUAL BOOKINGS for current month ---
     const typeDistribution = useMemo(() => {
+        const now = new Date();
+        const curM = now.getMonth();
+        const curY = now.getFullYear();
+
+        // Filter reservations for this month
+        const currentMonthRes = reservations.filter(r => {
+            const d = new Date(r.checkIn);
+            return d.getMonth() === curM && d.getFullYear() === curY;
+        });
+
         const counts: Record<string, number> = { Vila: 0, Hotel: 0, Apartment: 0, Guesthouse: 0 };
-        properties.forEach(p => { if (counts.hasOwnProperty(p.type)) counts[p.type]++; });
+        
+        currentMonthRes.forEach(r => {
+            const prop = properties.find(p => p.id === r.propertyId);
+            if (prop && counts.hasOwnProperty(prop.type)) {
+                counts[prop.type]++;
+            }
+        });
+        
+        const totalBookings = currentMonthRes.length;
+
         return Object.entries(counts).map(([name, value]) => ({
-            name, value, color: TYPE_COLORS[name as PropertyType], emoji: TYPE_EMOJIS[name as PropertyType]
+            name, 
+            value, 
+            color: TYPE_COLORS[name as PropertyType], 
+            emoji: TYPE_EMOJIS[name as PropertyType],
+            percentage: totalBookings > 0 ? Math.round((value / totalBookings) * 100) : 0
         })).filter(v => v.value > 0);
+    }, [properties, reservations]);
+
+    // --- Occupancy Rate by Unit: Real Capacity logic ---
+    const unitOccupancy = useMemo(() => {
+        return properties.map(p => ({
+            name: p.name,
+            val: Math.floor((p.currentBookings / p.maxCapacity) * 100)
+        })).sort((a,b) => b.val - a.val).slice(0, 8);
     }, [properties]);
 
     return (
@@ -186,7 +240,7 @@ export default function AnalyticsPage() {
                     <h1 className="text-3xl font-black text-white tracking-tight mb-2">Portfolio Analytics</h1>
                     <div className="flex items-center gap-2 text-slate-400 text-sm font-bold">
                         <div className={`w-2 h-2 rounded-full ${timeRange === 'this' ? 'bg-emerald-500 animate-pulse' : 'bg-purple-500'}`} />
-                        <span>Real-Time Data Mode</span>
+                        <span>{timeRange === 'this' ? 'Live Firestore Data' : 'Portfolio Insights'}</span>
                     </div>
                 </div>
 
@@ -233,13 +287,13 @@ export default function AnalyticsPage() {
 
             {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                {/* 1. Bookings Over Time */}
+                {/* 1. Bookings Trend */}
                 <div className="glass-card rounded-[2.5rem] p-8 flex flex-col h-[500px] border border-white/5 overflow-hidden">
                     <div className="flex items-center justify-between mb-10">
-                        <h3 className="text-white font-bold text-lg">Bookings Trend</h3>
+                        <h3 className="text-white font-bold text-lg">Booking Trend</h3>
                         <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest text-slate-500">
                             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Booked</span>
-                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Avail</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Max Cap</span>
                         </div>
                     </div>
                     <div className="flex-1 w-full">
@@ -263,19 +317,19 @@ export default function AnalyticsPage() {
                                     itemStyle={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' }}
                                 />
                                 <Area type="monotone" dataKey="booked" stroke="#8b5cf6" strokeWidth={4} fill="url(#gBooked)" name="Booked" />
-                                <Area type="monotone" dataKey="available" stroke="#10b981" strokeWidth={4} fill="url(#gAvail)" name="Available" />
+                                <Area type="monotone" dataKey="available" stroke="#10b981" strokeWidth={4} fill="url(#gAvail)" name="Max Capacity" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* 2. Unit Type Distribution */}
+                {/* 2. Unit Type Mix (BASED ON BOOKINGS) */}
                 <div className="glass-card rounded-[2.5rem] p-8 flex flex-col h-[500px] border border-white/5 overflow-hidden">
-                    <h3 className="text-white font-bold text-lg mb-6">Unit Type Mix</h3>
+                    <h3 className="text-white font-bold text-lg mb-6">Booked Unit Mix</h3>
                     <div className="flex-1 flex flex-col min-h-0">
                         <div className="h-[260px] w-full shrink-0">
                             <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
+                                <PieChart overflow="visible">
                                     <Pie
                                         data={typeDistribution}
                                         innerRadius={75}
@@ -288,7 +342,11 @@ export default function AnalyticsPage() {
                                             <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
-                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none' }} />
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 1000 }}
+                                        formatter={(value: any, name: string) => [`${value} Bookings`, name]}
+                                        wrapperStyle={{ zIndex: 1000 }}
+                                    />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>
@@ -299,13 +357,15 @@ export default function AnalyticsPage() {
                                         <span className="text-2xl">{type.emoji}</span>
                                         <div className="flex flex-col min-w-0">
                                             <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest truncate">{type.name}</span>
-                                            <span className="text-white font-black text-sm">
-                                                {properties.length > 0 ? Math.round((type.value / properties.length) * 100) : 0}%
-                                            </span>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-white font-black text-sm">{type.value} Bookings</span>
+                                                <span className="text-indigo-400 font-bold text-[10px]">{type.percentage}%</span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
+                            {typeDistribution.length === 0 && <p className="text-slate-500 text-center py-10 italic text-xs uppercase tracking-widest">No bookings this month</p>}
                         </div>
                     </div>
                 </div>
@@ -318,7 +378,7 @@ export default function AnalyticsPage() {
                     <div className="flex items-center justify-between mb-10">
                         <h3 className="text-white font-bold text-lg">Revenue Stream</h3>
                         <div className="px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                            <TrendingUp className="w-3 h-3" /> Estimated USD
+                            <TrendingUp className="w-3 h-3" /> Real Income
                         </div>
                     </div>
                     <div className="flex-1 w-full">
@@ -334,24 +394,24 @@ export default function AnalyticsPage() {
                     </div>
                 </div>
 
-                {/* 4. Occupancy Rate Bar Chart */}
+                {/* 4. Occupancy Rate by Unit */}
                 <div className="glass-card rounded-[2.5rem] p-8 h-[450px] flex flex-col border border-white/5 overflow-hidden">
-                    <h3 className="text-white font-bold text-lg mb-10">Occupancy by Unit (%)</h3>
+                    <h3 className="text-white font-bold text-lg mb-10">Live Occupancy by Unit</h3>
                     <div className="flex-1 space-y-6 overflow-y-auto custom-scrollbar pr-4">
                         {properties.map((u, i) => {
-                            const isBooked = u.status === "booked";
+                            const occVal = Math.floor((u.currentBookings / u.maxCapacity) * 100);
                             return (
-                                <div key={u.id} className="space-y-3">
+                                <div key={i} className="space-y-3">
                                     <div className="flex justify-between text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">
                                         <span className="truncate w-48">{u.name}</span>
-                                        <span className={isBooked ? "text-emerald-400" : "text-rose-400"}>{isBooked ? "100%" : "0%"}</span>
+                                        <span className={occVal > 70 ? "text-emerald-400" : "text-amber-400"}>{occVal}% occupied</span>
                                     </div>
                                     <div className="h-3 w-full bg-white/[0.02] rounded-full overflow-hidden border border-white/5 relative">
                                         <motion.div
                                             initial={{ width: 0 }}
-                                            animate={{ width: isBooked ? "100%" : "0%" }}
+                                            animate={{ width: `${occVal}%` }}
                                             transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1] }}
-                                            className={`h-full rounded-full bg-gradient-to-r from-indigo-600 to-emerald-500`}
+                                            className={`h-full rounded-full ${occVal > 70 ? 'bg-gradient-to-r from-indigo-600 to-emerald-500' : 'bg-gradient-to-r from-indigo-600 to-amber-500'}`}
                                         />
                                     </div>
                                 </div>

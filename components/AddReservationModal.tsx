@@ -17,10 +17,17 @@ export default function AddReservationModal({ isOpen, onClose, onAdd, loading, p
     const [checkIn, setCheckIn] = useState("");
     const [checkOut, setCheckOut] = useState("");
 
+    const today = new Date().toISOString().split('T')[0];
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!guestName || !checkIn || !checkOut) return;
         
+        if (checkIn < today) {
+            alert("Cannot create a booking in the past.");
+            return;
+        }
+
         const start = new Date(checkIn);
         const end = new Date(checkOut);
         
@@ -87,6 +94,7 @@ export default function AddReservationModal({ isOpen, onClose, onAdd, loading, p
                                     <input
                                         required
                                         type="date"
+                                        min={today}
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-white font-bold focus:outline-none focus:border-indigo-500/50 transition-all shadow-inner [color-scheme:dark]"
                                         value={checkIn}
                                         onChange={(e) => setCheckIn(e.target.value)}
@@ -99,6 +107,7 @@ export default function AddReservationModal({ isOpen, onClose, onAdd, loading, p
                                     <input
                                         required
                                         type="date"
+                                        min={checkIn || today}
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-white font-bold focus:outline-none focus:border-indigo-500/50 transition-all shadow-inner [color-scheme:dark]"
                                         value={checkOut}
                                         onChange={(e) => setCheckOut(e.target.value)}

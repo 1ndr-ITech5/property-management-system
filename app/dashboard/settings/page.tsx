@@ -5,8 +5,8 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { updateProfile, updatePassword } from "firebase/auth";
-import { Bell, Mail, Smartphone, Shield, User, Save, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { Bell, Mail, Smartphone, Shield, User, Save, CheckCircle2, Eye, EyeOff, Lock, UserCircle } from "lucide-react";
 import Toast from "@/components/Toast";
 
 export default function SettingsPage() {
@@ -16,9 +16,16 @@ export default function SettingsPage() {
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
     // Form States
-    const [profile, setProfile] = useState({ name: "", email: "" });
-    const [password, setPassword] = useState("");
-    const [showPassword, setShowPassword] = useState(false);
+    const [firstName, setFirstName] = useState("");
+    const [lastName, setLastName] = useState("");
+    const [gender, setGender] = useState<"Male" | "Female" | "Other" | "">("");
+    
+    // Password States
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [showPasswords, setShowPasswords] = useState(false);
+
     const [notifications, setNotifications] = useState({
         emailAlerts: true,
         newBookings: true,
@@ -34,15 +41,17 @@ export default function SettingsPage() {
                 const userDoc = await getDoc(doc(db, "users", currentUser.uid));
                 if (userDoc.exists()) {
                     const data = userDoc.data();
-                    setProfile({ 
-                        name: data.name || currentUser.displayName || "", 
-                        email: data.email || currentUser.email || "" 
-                    });
+                    const nameParts = (data.name || currentUser.displayName || "").split(" ");
+                    setFirstName(nameParts[0] || "");
+                    setLastName(nameParts.slice(1).join(" ") || "");
+                    setGender(data.gender || "");
                     if (data.notifications) {
                         setNotifications(data.notifications);
                     }
                 } else {
-                    setProfile({ name: currentUser.displayName || "", email: currentUser.email || "" });
+                    const nameParts = (currentUser.displayName || "").split(" ");
+                    setFirstName(nameParts[0] || "");
+                    setLastName(nameParts.slice(1).join(" ") || "");
                 }
             } catch (e) {
                 console.error("Error fetching settings:", e);
@@ -53,41 +62,67 @@ export default function SettingsPage() {
         fetchSettings();
     }, [currentUser]);
 
-    const handleSave = async () => {
+    const handleSaveProfile = async () => {
         if (!currentUser || !auth.currentUser) return;
+        
+        const fullName = `${firstName} ${lastName}`.trim();
+        if (!fullName) {
+            setToast({ message: "Full name is required.", type: "error" });
+            return;
+        }
+
         setSaving(true);
         try {
-            // 1. Update Auth Profile (Name)
-            if (profile.name !== currentUser.displayName) {
-                await updateProfile(auth.currentUser, { displayName: profile.name });
-            }
+            // 1. Update Auth
+            await updateProfile(auth.currentUser, { displayName: fullName });
 
-            // 2. Update Password if provided
-            if (password.trim().length > 0) {
-                if (password.length < 6) {
-                    setToast({ message: "Password must be at least 6 characters.", type: "error" });
-                    setSaving(false);
-                    return;
-                }
-                await updatePassword(auth.currentUser, password);
-                setPassword("");
-            }
-
-            // 3. Update Firestore
+            // 2. Update Firestore
             await setDoc(doc(db, "users", currentUser.uid), {
-                name: profile.name,
-                email: profile.email,
+                name: fullName,
+                gender: gender,
                 notifications: notifications,
                 updatedAt: new Date().toISOString()
             }, { merge: true });
 
-            setToast({ message: "Settings and security updated!", type: "success" });
+            setToast({ message: "Profile updated successfully!", type: "success" });
+        } catch (e) {
+            setToast({ message: "Failed to update profile.", type: "error" });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleUpdatePassword = async () => {
+        if (!currentUser || !auth.currentUser || !currentUser.email) return;
+
+        if (newPassword !== confirmPassword) {
+            setToast({ message: "Passwords do not match.", type: "error" });
+            return;
+        }
+        if (newPassword.length < 6) {
+            setToast({ message: "New password too short.", type: "error" });
+            return;
+        }
+
+        setSaving(true);
+        try {
+            // 1. Re-authenticate
+            const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+            await reauthenticateWithCredential(auth.currentUser, credential);
+
+            // 2. Update Password
+            await updatePassword(auth.currentUser, newPassword);
+            
+            setNewPassword("");
+            setConfirmPassword("");
+            setCurrentPassword("");
+            setToast({ message: "Password updated successfully!", type: "success" });
         } catch (e: any) {
-            console.error("Save error:", e);
-            if (e.code === 'auth/requires-recent-login') {
-                setToast({ message: "Please log out and back in to change password.", type: "error" });
+            console.error(e);
+            if (e.code === 'auth/wrong-password') {
+                setToast({ message: "Incorrect current password.", type: "error" });
             } else {
-                setToast({ message: "Failed to save settings.", type: "error" });
+                setToast({ message: "Security update failed.", type: "error" });
             }
         } finally {
             setSaving(false);
@@ -106,172 +141,154 @@ export default function SettingsPage() {
         );
     }
 
-    const sectionCardStyle = "glass-panel rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl transition-all hover:border-white/20";
+    const sectionCardStyle = "glass-panel rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl transition-all hover:border-white/20 mb-8";
 
     return (
         <div className="pt-2 pb-20 max-w-4xl mx-auto">
-            <div className="flex items-center justify-between mb-10">
-                <div>
-                    <h1 className="text-3xl font-black text-white tracking-tight mb-2">Account Settings</h1>
-                    <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Personalize your PMS experience</p>
-                </div>
-                <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center gap-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
-                >
-                    {saving ? "Saving..." : <><Save className="w-4 h-4" /> Save Changes</>}
-                </button>
+            <div className="mb-10">
+                <h1 className="text-3xl font-black text-white tracking-tight mb-2">Account Settings</h1>
+                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Personal Information & Security</p>
             </div>
 
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-8"
-            >
-                {/* Profile & Security Section */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                {/* 1. PERSONAL INFORMATION */}
                 <div className={sectionCardStyle}>
-                    <div className="p-8 border-b border-white/5 flex items-center gap-4 bg-white/5">
-                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-                            <User className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-black text-white">Profile & Security</h2>
-                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Manage your identity and credentials</p>
-                        </div>
-                    </div>
-                    <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Name</label>
-                            <input 
-                                type="text" 
-                                value={profile.name}
-                                onChange={e => setProfile({...profile, name: e.target.value})}
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:outline-none focus:border-indigo-500/50 transition-all shadow-inner"
-                                placeholder="Your Name"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">New Password (Optional)</label>
-                            <div className="relative">
-                                <input 
-                                    type={showPassword ? "text" : "password"} 
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-2xl pl-5 pr-12 py-4 text-white font-bold focus:outline-none focus:border-indigo-500/50 transition-all shadow-inner"
-                                    placeholder="••••••••"
-                                />
-                                <button 
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
-                                >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
+                    <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                                <UserCircle className="w-6 h-6" />
                             </div>
+                            <div>
+                                <h2 className="text-xl font-black text-white">Personal Information</h2>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Details visible across the system</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleSaveProfile}
+                            disabled={saving}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50"
+                        >
+                            Update Profile
+                        </button>
+                    </div>
+                    <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">First Name</label>
+                            <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:outline-none focus:border-indigo-500/50 transition-all shadow-inner" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Last Name</label>
+                            <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:outline-none focus:border-indigo-500/50 transition-all shadow-inner" />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email Address (Read Only)</label>
-                            <input 
-                                type="email" 
-                                value={profile.email}
-                                readOnly
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-slate-500 font-bold outline-none cursor-not-allowed opacity-60"
-                            />
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Gender</label>
+                            <div className="flex gap-3">
+                                {["Male", "Female", "Other"].map((g) => (
+                                    <button
+                                        key={g}
+                                        onClick={() => setGender(g as any)}
+                                        className={`flex-1 py-3 rounded-xl border font-black text-xs uppercase tracking-widest transition-all ${
+                                            gender === g ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-400 shadow-lg shadow-indigo-500/10" : "bg-white/5 border-white/10 text-slate-500 hover:border-white/20"
+                                        }`}
+                                    >
+                                        {g}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Notifications Section */}
+                {/* 2. PASSWORD SECURITY */}
                 <div className={sectionCardStyle}>
-                    <div className="p-8 border-b border-white/5 flex items-center gap-4 bg-white/5">
-                        <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400">
-                            <Bell className="w-6 h-6" />
+                    <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 flex items-center justify-center text-rose-400">
+                                <Lock className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-white">Security</h2>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Secure password management</p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-black text-white">Notifications</h2>
-                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Configure your alert preferences</p>
-                        </div>
+                        <button
+                            onClick={handleUpdatePassword}
+                            disabled={saving || !currentPassword}
+                            className="bg-rose-600 hover:bg-rose-500 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50"
+                        >
+                            Change Password
+                        </button>
                     </div>
                     <div className="p-8 space-y-6">
-                        <div className="flex items-center justify-between p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors group">
-                            <div className="flex items-center gap-5">
-                                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
-                                    <Mail className="w-6 h-6" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-bold">Email Notifications</p>
-                                    <p className="text-xs text-slate-500 mt-1">Receive core updates via your registered email.</p>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => toggleNotification('emailAlerts')}
-                                className={`w-14 h-8 rounded-full p-1 transition-all duration-300 ${notifications.emailAlerts ? 'bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.4)]' : 'bg-slate-800'}`}
-                            >
-                                <div className={`w-6 h-6 rounded-full bg-white transition-transform duration-300 ${notifications.emailAlerts ? 'translate-x-6' : 'translate-x-0'}`} />
-                            </button>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Current Password</label>
+                            <input 
+                                type={showPasswords ? "text" : "password"} 
+                                value={currentPassword} 
+                                onChange={e => setCurrentPassword(e.target.value)} 
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:outline-none focus:border-rose-500/50 transition-all shadow-inner"
+                                placeholder="Enter current password to verify"
+                            />
                         </div>
-
-                        <div className="flex items-center justify-between p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
-                            <div className="flex items-center gap-5">
-                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                                    <Smartphone className="w-6 h-6" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-bold">Push Notifications</p>
-                                    <p className="text-xs text-slate-500 mt-1">Instant browser alerts for high-priority actions.</p>
-                                </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">New Password</label>
+                                <input type={showPasswords ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:outline-none focus:border-indigo-500/50 transition-all shadow-inner" />
                             </div>
-                            <button 
-                                onClick={() => toggleNotification('pushNotifications')}
-                                className={`w-14 h-8 rounded-full p-1 transition-all duration-300 ${notifications.pushNotifications ? 'bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-slate-800'}`}
-                            >
-                                <div className={`w-6 h-6 rounded-full bg-white transition-transform duration-300 ${notifications.pushNotifications ? 'translate-x-6' : 'translate-x-0'}`} />
-                            </button>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Confirm New Password</label>
+                                <input type={showPasswords ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold focus:outline-none focus:border-indigo-500/50 transition-all shadow-inner" />
+                            </div>
                         </div>
-
-                        <div className="h-px bg-white/5 my-8" />
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {[
-                                { key: 'newBookings', label: 'New Reservations', sub: 'Instant alerts for every new booking' },
-                                { key: 'cancellations', label: 'Cancellations', sub: 'Be notified when a guest cancels' },
-                                { key: 'statusChanges', label: 'Property Updates', sub: 'Status and maintenance changes' }
-                            ].map((item) => (
-                                <button
-                                    key={item.key}
-                                    onClick={() => toggleNotification(item.key as any)}
-                                    className={`flex items-center gap-4 p-5 rounded-[2rem] border transition-all text-left group ${
-                                        notifications[item.key as keyof typeof notifications] 
-                                        ? 'bg-indigo-500/10 border-indigo-500/30' 
-                                        : 'bg-white/5 border-white/10 hover:border-white/20'
-                                    }`}
-                                >
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                                        notifications[item.key as keyof typeof notifications] ? 'bg-indigo-500 text-white' : 'bg-white/5 text-slate-500'
-                                    }`}>
-                                        <CheckCircle2 className="w-5 h-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-white font-bold text-sm truncate">{item.label}</p>
-                                        <p className="text-[10px] text-slate-500 font-medium truncate">{item.sub}</p>
-                                    </div>
-                                </button>
-                            ))}
+                        <div className="flex justify-end">
+                            <button 
+                                type="button" 
+                                onClick={() => setShowPasswords(!showPasswords)}
+                                className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-all"
+                            >
+                                {showPasswords ? <><EyeOff className="w-3 h-3" /> Hide Passwords</> : <><Eye className="w-3 h-3" /> Show Passwords</>}
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Security Section Placeholder */}
-                <div className="glass-panel rounded-[2.5rem] p-8 border border-white/10 opacity-60">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-rose-500/20 flex items-center justify-center text-rose-400">
-                            <Shield className="w-6 h-6" />
+                {/* 3. NOTIFICATIONS TOGGLES */}
+                <div className={sectionCardStyle}>
+                    <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/5">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400">
+                                <Bell className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black text-white">Notifications</h2>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">System & Alert Preferences</p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-white">Advanced Security</h2>
-                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Coming soon in PMS Premium</p>
-                        </div>
+                        <button
+                            onClick={handleSaveProfile} // Reuses general save logic
+                            className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-purple-500/20"
+                        >
+                            Save Alerts
+                        </button>
+                    </div>
+                    <div className="p-8 space-y-4">
+                        {[
+                            { key: 'emailAlerts', label: 'Email Notifications', icon: Mail },
+                            { key: 'pushNotifications', label: 'Push Notifications', icon: Smartphone }
+                        ].map((item) => (
+                            <div key={item.key} className="flex items-center justify-between p-5 rounded-[1.5rem] bg-white/[0.02] border border-white/5">
+                                <div className="flex items-center gap-4">
+                                    <item.icon className="w-5 h-5 text-slate-400" />
+                                    <span className="text-sm font-bold text-white">{item.label}</span>
+                                </div>
+                                <button 
+                                    onClick={() => toggleNotification(item.key as any)}
+                                    className={`w-12 h-7 rounded-full p-1 transition-all ${notifications[item.key as keyof typeof notifications] ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                                >
+                                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${notifications[item.key as keyof typeof notifications] ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </motion.div>

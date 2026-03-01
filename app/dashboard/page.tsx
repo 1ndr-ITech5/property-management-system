@@ -324,7 +324,9 @@ export default function DashboardPage() {
     <ProtectedRoute>
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight">System Dashboard</h1>
+          <h1 className="text-3xl font-black text-white tracking-tight">
+            Welcome back, {currentUser?.displayName?.split(' ')[0] || "Admin"}
+          </h1>
           <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Real-time portfolio management</p>
         </div>
       </div>

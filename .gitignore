@@ -1,18 +1,60 @@
-# Next.js build folder
+# Dependencies
+node_modules/
+
+# Next.js
 .next/
 out/
 
-# Node modules
-node_modules/
-
-# Environment files
+# Environment and secrets (never commit)
 .env
+.env.*
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
+!.env.example
 
-# Vite / CRA / Typescript
+# Google Cloud / Firebase / GCP
+*.pem
+*-credentials*.json
+*credentials*.json
+service-account*.json
+serviceAccount*.json
+gcp-key*.json
+firebase-adminsdk*.json
+.firebaserc
+.gcloud/
+
+# API keys and secrets (backup / export files)
+*secret*
+*secrets*
+*.key
+*.p12
+*.pfx
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Build and TypeScript
 dist/
 *.tsbuildinfo
+
+# Debug and logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Vercel (optional; uncomment if you don't want to commit)
+# .vercel
+
+# Misc
 public/logo.png

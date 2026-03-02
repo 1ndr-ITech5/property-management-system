@@ -12,6 +12,7 @@ import EditPropertyModal from "@/components/EditPropertyModal";
 import PropertyDetailsModal from "@/components/PropertyDetailsModal";
 import AddReservationModal from "@/components/AddReservationModal";
 import Toast from "@/components/Toast";
+import { logActivity } from "@/lib/activity";
 
 import { PropertyType } from "../page";
 
@@ -116,7 +117,6 @@ export default function PropertiesPage() {
 
     const transformedProperties = useMemo(() => {
         let result = properties.map(p => {
-            // A property is also considered booked if its currentBookings >= maxCapacity
             let derivedStatus = p.status;
             if (p.status !== "unavailable") {
                 if (p.currentBookings >= p.maxCapacity) {
@@ -126,7 +126,6 @@ export default function PropertiesPage() {
             return { ...p, status: derivedStatus };
         });
 
-        // Search Filter
         if (search) {
             const term = search.toLowerCase();
             result = result.filter(p => 
@@ -135,24 +134,19 @@ export default function PropertiesPage() {
             );
         }
 
-        // Status Filter
         if (statusFilter !== "all") {
             result = result.filter(p => p.status === statusFilter);
         }
 
-        // Type Filter
         if (typeFilter !== "all") {
             result = result.filter(p => p.type === typeFilter);
         }
 
-        // Sort
         result.sort((a, b) => {
             let valA = a[sortKey as keyof Property];
             let valB = b[sortKey as keyof Property];
-
             if (typeof valA === "string") valA = valA.toLowerCase();
             if (typeof valB === "string") valB = valB.toLowerCase();
-
             if (valA < valB) return sortOrder === "asc" ? -1 : 1;
             if (valA > valB) return sortOrder === "asc" ? 1 : -1;
             return 0;
@@ -177,10 +171,7 @@ export default function PropertiesPage() {
         try {
             setLoading(true);
             await addDoc(collection(db, "properties"), {
-                name,
-                price,
-                status,
-                type,
+                name, price, status, type,
                 description: description.trim() || "No description yet",
                 bedrooms: bedrooms || 1,
                 bathrooms: bathrooms || 1,
@@ -190,6 +181,13 @@ export default function PropertiesPage() {
                 createdAt: serverTimestamp(),
                 ownerId: currentUser.uid,
             });
+
+            await logActivity(
+                currentUser.uid,
+                "property",
+                "New Property Added",
+                `${name} has been successfully added to your portfolio.`
+            );
 
             setIsAdding(false);
             showToast("Property added successfully!", "success");
@@ -231,6 +229,14 @@ export default function PropertiesPage() {
                 currentBookings: newCount,
                 status: newStatus
             });
+
+            // 3. Log Activity for Notification
+            await logActivity(
+                currentUser.uid,
+                "booking",
+                "New Reservation Confirmed",
+                `Guest ${guestName} booked ${bookingProperty.name} for $${bookingProperty.price}.`
+            );
             
             setBookingProperty(null);
             showToast("Booking confirmed successfully!", "success");
@@ -276,10 +282,7 @@ export default function PropertiesPage() {
             setLoading(true);
             const propertyRef = doc(db, "properties", id);
             await updateDoc(propertyRef, {
-                name,
-                price,
-                status,
-                type,
+                name, price, status, type,
                 description: description.trim() || "No description yet",
                 bedrooms: bedrooms || 1,
                 bathrooms: bathrooms || 1,
@@ -313,7 +316,6 @@ export default function PropertiesPage() {
                 </div>
 
                 <div className="flex flex-col xl:flex-row items-center gap-4 w-full xl:w-auto">
-                    {/* Search */}
                     <div className="relative group w-full sm:w-64">
                         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-purple-400 transition-colors" />
                         <input
@@ -475,42 +477,11 @@ export default function PropertiesPage() {
                 </div>
             )}
 
-            <AddPropertyModal
-                isOpen={isAdding}
-                onClose={() => setIsAdding(false)}
-                onAdd={handleAddProperty}
-                loading={loading}
-            />
-
-            <EditPropertyModal
-                isOpen={!!editingProperty}
-                onClose={() => setEditingProperty(null)}
-                property={editingProperty}
-                onUpdate={handleUpdateProperty}
-                loading={loading}
-            />
-
-            <PropertyDetailsModal
-                isOpen={!!viewingProperty}
-                onClose={() => setViewingProperty(null)}
-                property={viewingProperty}
-            />
-
-            <AddReservationModal
-                isOpen={!!bookingProperty}
-                onClose={() => setBookingProperty(null)}
-                onAdd={handleAddReservation}
-                loading={loading}
-                propertyName={bookingProperty?.name || ""}
-            />
-
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    type={toast.type}
-                    onClose={() => setToast(null)}
-                />
-            )}
+            <AddPropertyModal isOpen={isAdding} onClose={() => setIsAdding(false)} onAdd={handleAddProperty} loading={loading} />
+            <EditPropertyModal isOpen={!!editingProperty} onClose={() => setEditingProperty(null)} property={editingProperty} onUpdate={handleUpdateProperty} loading={loading} />
+            <PropertyDetailsModal isOpen={!!viewingProperty} onClose={() => setViewingProperty(null)} property={viewingProperty} />
+            <AddReservationModal isOpen={!!bookingProperty} onClose={() => setBookingProperty(null)} onAdd={handleAddReservation} loading={loading} propertyName={bookingProperty?.name || ""} />
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </div>
     );
 }

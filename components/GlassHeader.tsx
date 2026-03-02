@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Activity, markActivityAsRead } from "@/lib/activity";
+import { playNotificationSound } from "@/lib/notification-sound";
 
 // --- SUB-COMPONENT: Live Clock ---
 function LiveClock() {
@@ -60,6 +61,7 @@ export default function GlassHeader({ onMenuClick }: { onMenuClick: () => void }
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [activities, setActivities] = useState<Activity[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const lastActivityIdRef = useRef<string | null>(null);
 
     const { currentUser } = useAuth();
     const router = useRouter();
@@ -93,6 +95,16 @@ export default function GlassHeader({ onMenuClick }: { onMenuClick: () => void }
         );
         const unsubAct = onSnapshot(qAct, (snap) => {
             const actData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Activity));
+            
+            // Check for NEW incoming notifications to play sound
+            if (actData.length > 0) {
+                const latest = actData[0];
+                if (lastActivityIdRef.current && latest.id !== lastActivityIdRef.current && !latest.isRead) {
+                    playNotificationSound();
+                }
+                lastActivityIdRef.current = latest.id || null;
+            }
+
             setActivities(actData);
             setUnreadCount(actData.filter(a => !a.isRead).length);
         });
@@ -142,6 +154,18 @@ export default function GlassHeader({ onMenuClick }: { onMenuClick: () => void }
 
     const handleMarkAsRead = async (id: string) => {
         if (id) await markActivityAsRead(id);
+    };
+
+    const handleToggleNotifications = async () => {
+        const newState = !isNotificationOpen;
+        setIsNotificationOpen(newState);
+
+        // If we are opening the dropdown, mark all unread as read
+        if (newState && unreadCount > 0) {
+            const unreadIds = activities.filter(a => !a.isRead && a.id).map(a => a.id!);
+            const batch = unreadIds.map(id => markActivityAsRead(id));
+            await Promise.all(batch);
+        }
     };
 
     return (
@@ -253,7 +277,7 @@ export default function GlassHeader({ onMenuClick }: { onMenuClick: () => void }
 
             <div className="flex items-center gap-6 relative" ref={notificationRef}>
                 <button 
-                    onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                    onClick={handleToggleNotifications}
                     className={`relative p-3 glass-card rounded-xl group transition-all ${isNotificationOpen ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`}
                 >
                     <Bell className="w-5 h-5 group-hover:scale-110 transition-transform" />

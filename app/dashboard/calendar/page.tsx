@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Plus, X, Clock } from "lucide-react";
 import AddReservationModal from "@/components/AddReservationModal";
 import Toast from "@/components/Toast";
+import { logActivity } from "@/lib/activity";
 import { PropertyType } from "../page";
 
 interface Reservation {
@@ -166,6 +167,15 @@ export default function CalendarPage() {
                 currentBookings: newCount,
                 status: newCount >= bookingProperty.maxCapacity ? "booked" : bookingProperty.status
             });
+
+            // Log Activity for Notification
+            await logActivity(
+                currentUser.uid,
+                "booking",
+                "New Calendar Booking",
+                `Guest ${guestName} reserved ${bookingProperty.name} via Calendar.`
+            );
+
             setBookingProperty(null);
             setToast({ message: "Booking confirmed!", type: "success" });
         } catch (e) {

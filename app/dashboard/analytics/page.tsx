@@ -329,7 +329,7 @@ export default function AnalyticsPage() {
                     <div className="flex-1 flex flex-col min-h-0">
                         <div className="h-[260px] w-full shrink-0">
                             <ResponsiveContainer width="100%" height="100%">
-                                <PieChart overflow="visible">
+                                <PieChart>
                                     <Pie
                                         data={typeDistribution}
                                         innerRadius={75}

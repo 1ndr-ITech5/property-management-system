@@ -344,7 +344,7 @@ export default function AnalyticsPage() {
                                     </Pie>
                                     <Tooltip 
                                         contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 1000 }}
-                                        formatter={(value: any, name: string) => [`${value} Bookings`, name]}
+                                        formatter={(value: any, name?: string) => [`${value} Bookings`, name ?? '']}
                                         wrapperStyle={{ zIndex: 1000 }}
                                     />
                                 </PieChart>

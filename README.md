@@ -21,39 +21,6 @@ A modern property management dashboard built with Next.js 14, Firebase, and Tail
 - **Settings** — Profile management and preferences
 - **Visual Design** — Dark purple gradient theme with animated 3D particle background, cursor-reactive gradient on auth pages, frosted glass panels throughout
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- A Firebase project with Authentication and Firestore enabled
-
-### Setup
-
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/1ndr-ITech5/property-management-system.git
-   cd property-management-system
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env.local` file from the example:
-   ```bash
-   cp .env.example .env.local
-   ```
-   Fill in your Firebase config values from the Firebase Console.
-
-4. Run the dev server:
-   ```bash
-   npm run dev
-   ```
-
-5. Open [http://localhost:3000](http://localhost:3000)
-
 ## Deployment (Vercel)
 
 1. Push the repo to GitHub
@@ -89,15 +56,3 @@ lib/
 context/
 └── AuthContext.tsx # Auth state provider
 ```
-
-## Environment Variables
-
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase API key |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
-| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase app ID |
-| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | Firebase measurement ID (optional) |
